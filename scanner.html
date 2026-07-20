@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>出席QR打刻</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      font-family: "Yu Gothic", "Meiryo", -apple-system, sans-serif;
+      background: #f5f5f5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #reader { width: 90vw; max-width: 480px; border-radius: 12px; overflow: hidden; }
+    #message {
+      margin-top: 24px; font-size: 7vw; text-align: center;
+      min-height: 3em; display: flex; align-items: center; justify-content: center;
+      padding: 0 16px;
+    }
+    .ok { color: #1B5E20; font-weight: bold; }
+    .invalid { color: #B71C1C; font-weight: bold; }
+    .duplicate { color: #888; }
+    #manualBtn {
+      margin-top: 16px; padding: 12px 24px; font-size: 4vw; border-radius: 8px;
+      border: 1px solid #999; background: white;
+    }
+    #manualBox { display: none; margin-top: 16px; }
+    #manualBox input { font-size: 5vw; padding: 8px; width: 40vw; }
+    #manualBox button { font-size: 5vw; padding: 8px 16px; }
+    #configNote { font-size: 3vw; color: #B71C1C; margin-top: 8px; text-align: center; padding: 0 16px; }
+  </style>
+</head>
+<body>
+  <div id="reader"></div>
+  <div id="message">QRカードをかざしてください</div>
+  <button id="manualBtn" onclick="showManual()">手入力</button>
+  <div id="manualBox">
+    <input id="manualId" placeholder="利用者ID (例: U001)">
+    <button onclick="submitManual()">送信</button>
+  </div>
+  <div id="configNote"></div>
+
+  <script>
+    const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxoGn2hYOduL5Y2MH-PU_kQARERwjADfyT_GgWXRJ1gfQhUeNPXVlE3DL67nj-nb1sarw/exec";
+
+    if (WEBAPP_URL.indexOf("WEBAPP_URL_HERE") !== -1) {
+      document.getElementById("configNote").textContent =
+        "設定が未完了です（scanner.html内のWEBAPP_URLを書き換えてください）";
+    }
+
+    let busy = false;
+    let lastResultAt = 0;
+    let jsonpCounter = 0;
+
+    function callApi(params, onSuccess, onError) {
+      const cbName = "jsonp_cb_" + (jsonpCounter++);
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        onError(new Error("タイムアウト"));
+      }, 15000);
+
+      function cleanup() {
+        clearTimeout(timeoutId);
+        delete window[cbName];
+        const s = document.getElementById(cbName);
+        if (s) s.remove();
+      }
+
+      window[cbName] = function (data) {
+        cleanup();
+        onSuccess(data);
+      };
+
+      const query = Object.keys(params).map(k =>
+        encodeURIComponent(k) + "=" + encodeURIComponent(params[k])
+      ).join("&") + "&callback=" + cbName;
+
+      const script = document.createElement("script");
+      script.id = cbName;
+      script.src = WEBAPP_URL + "?" + query;
+      script.onerror = () => { cleanup(); onError(new Error("通信エラー")); };
+      document.body.appendChild(script);
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      if (busy || now - lastResultAt < 2000) return;
+      busy = true;
+      lastResultAt = now;
+      callApi({ uid: decodedText.trim() }, onScanResult, onScanError);
+    }
+
+    function onScanResult(res) {
+      const el = document.getElementById("message");
+      if (res.status === "ok") {
+        el.className = "ok";
+        el.textContent = `${res.name}さん ${res.kubun === "来所" ? "おはようございます" : "おつかれさまでした"}（${res.time} 打刻）`;
+      } else if (res.status === "duplicate") {
+        el.className = "duplicate";
+        el.textContent = `${res.name}さん、${res.message}`;
+      } else {
+        el.className = "invalid";
+        el.textContent = res.message;
+      }
+      setTimeout(() => {
+        el.className = "";
+        el.textContent = "QRカードをかざしてください";
+        busy = false;
+      }, 3000);
+    }
+
+    function onScanError() {
+      document.getElementById("message").textContent = "通信エラー。もう一度お試しください";
+      busy = false;
+    }
+
+    function showManual() {
+      document.getElementById("manualBox").style.display = "block";
+    }
+
+    function submitManual() {
+      const uid = document.getElementById("manualId").value.trim();
+      if (!uid) return;
+      callApi({ uid: uid }, (res) => {
+        onScanResult(res);
+        document.getElementById("manualBox").style.display = "none";
+        document.getElementById("manualId").value = "";
+      }, onScanError);
+    }
+
+    const html5QrCode = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then((cameras) => {
+      const cameraId = cameras.length > 0 ? cameras[cameras.length - 1].id : null;
+      if (!cameraId) {
+        document.getElementById("message").textContent = "カメラが見つかりません。手入力をご利用ください";
+        return;
+      }
+      html5QrCode.start(
+        cameraId,
+        { fps: 10, qrbox: 250 },
+        onScanSuccess
+      );
+    }).catch(() => {
+      document.getElementById("message").textContent = "カメラの起動に失敗しました。手入力をご利用ください";
+    });
+  </script>
+</body>
+</html>
