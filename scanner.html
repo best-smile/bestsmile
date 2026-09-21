@@ -75,6 +75,10 @@
     #staffScreen .btnGray { background: #777; }
     .slotRow { display: flex; gap: 2vw; align-items: center; margin-bottom: 2vw; }
     .slotRow span { font-size: 3.4vw; width: 26vw; flex-shrink: 0; }
+    .slotBox { border: 1px solid #e0e0e0; border-radius: 8px; padding: 2vw; margin-bottom: 2.5vw; background: #FCFCFC; }
+    .slotHead { font-size: 4vw; font-weight: bold; color: #1F4E79; margin-bottom: 1.5vw; }
+    .slotBox select { margin-bottom: 2vw; }
+    .slotBox .btn { font-size: 3.6vw; padding: 2vw 3.5vw; margin-top: 0; }
     #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
     #staffWho { font-size: 3.6vw; color: #1B5E20; }
   </style>
@@ -321,13 +325,21 @@
       const box = document.getElementById("slotList");
       box.innerHTML = "";
       (s.slots || []).forEach((label, i) => {
-        const row = document.createElement("div");
-        row.className = "slotRow";
-        const sp = document.createElement("span");
-        sp.textContent = label;
+        const info = (s.slotRanges && s.slotRanges[i]) || {};
+        if (!info.available) return;   // 通所時間外の枠は出さない
+
+        const wrap = document.createElement("div");
+        wrap.className = "slotBox";
+
+        const head = document.createElement("div");
+        head.className = "slotHead";
+        head.textContent = label;
+        wrap.appendChild(head);
+
+        // 作業内容
         const sel = document.createElement("select");
         const blank = document.createElement("option");
-        blank.value = ""; blank.textContent = "（なし）";
+        blank.value = ""; blank.textContent = "（作業なし）";
         sel.appendChild(blank);
         taskList.forEach(name => {
           const op = document.createElement("option");
@@ -336,9 +348,36 @@
         });
         sel.value = (s.slotTasks && s.slotTasks[i]) || "";
         sel.onchange = () => saveWork(i, sel.value);
-        row.appendChild(sp); row.appendChild(sel);
-        box.appendChild(row);
+        wrap.appendChild(sel);
+
+        // 実際に作業した時間（途中で抜けた場合だけ入力）
+        const line = document.createElement("div");
+        line.className = "slotRow";
+        const lab = document.createElement("span");
+        lab.textContent = "実際の時間";
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.placeholder = info.defaultRange || "";
+        inp.value = info.real || "";
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.textContent = "保存";
+        btn.onclick = () => saveSlotTime(i, inp.value.trim());
+        const clr = document.createElement("button");
+        clr.className = "btn btnGray";
+        clr.textContent = "戻す";
+        clr.onclick = () => { inp.value = ""; saveSlotTime(i, ""); };
+        line.appendChild(lab); line.appendChild(inp); line.appendChild(btn); line.appendChild(clr);
+        wrap.appendChild(line);
+
+        box.appendChild(wrap);
       });
+    }
+
+    function saveSlotTime(slotIndex, range) {
+      callApi(withPin({ uid: confirmUid, action: "updateSlotTime", slot: slotIndex, range: range }),
+        (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
     function withPin(params) {
