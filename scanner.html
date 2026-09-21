@@ -161,9 +161,21 @@
     let jsonpCounter = 0;
     let confirmUid = null;
 
+    // 読み取りだけの操作。失敗しても安全にやり直せる（書き込み系は二重記録になるのでやり直さない）
+    const RETRYABLE = ["summary", "taskList", "staffAuth"];
+
     function callApi(params, onSuccess, onError) {
+      const retryable = RETRYABLE.indexOf(params.action) !== -1;
+      callApiOnce(params, onSuccess, function (err) {
+        // Apps Scriptは久しぶりの実行だと起動に時間がかかることがあるため、一度だけやり直す
+        if (retryable) callApiOnce(params, onSuccess, onError);
+        else onError(err);
+      });
+    }
+
+    function callApiOnce(params, onSuccess, onError) {
       const cbName = "jsonp_cb_" + (jsonpCounter++);
-      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 15000);
+      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 30000);
 
       function cleanup() {
         clearTimeout(timeoutId);
