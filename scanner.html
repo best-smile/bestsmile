@@ -29,6 +29,27 @@
     #manualBox input { font-size: 5vw; padding: 8px; width: 40vw; }
     #manualBox button { font-size: 5vw; padding: 8px 16px; }
     #configNote { font-size: 3vw; color: #B71C1C; margin-top: 8px; text-align: center; padding: 0 16px; }
+
+    /* 退勤時の本人確認画面 */
+    #confirmScreen {
+      display: none; position: fixed; inset: 0; background: #fff; z-index: 10;
+      flex-direction: column; align-items: center; justify-content: center; padding: 4vw;
+      box-sizing: border-box; text-align: center;
+    }
+    #confirmName { font-size: 8vw; font-weight: bold; color: #1B5E20; margin-bottom: 4vw; }
+    .cRow {
+      width: 92vw; max-width: 600px; background: #F1F8E9; border-radius: 12px;
+      padding: 3vw 4vw; margin-bottom: 3vw; text-align: left;
+    }
+    .cLabel { font-size: 4vw; color: #555; }
+    .cValue { font-size: 7vw; font-weight: bold; color: #222; }
+    #confirmBtns { display: flex; gap: 4vw; margin-top: 3vw; }
+    #confirmBtns button {
+      font-size: 6vw; padding: 4vw 8vw; border-radius: 12px; border: none; font-weight: bold;
+    }
+    #btnOk { background: #2E7D32; color: white; }
+    #btnNg { background: #fff; color: #B71C1C; border: 2px solid #B71C1C; }
+    #staffCall { display: none; font-size: 6vw; color: #B71C1C; font-weight: bold; margin-top: 4vw; }
   </style>
 </head>
 <body>
@@ -41,6 +62,19 @@
   </div>
   <div id="configNote"></div>
 
+  <!-- 退勤時の本人確認 -->
+  <div id="confirmScreen">
+    <div id="confirmName"></div>
+    <div class="cRow"><div class="cLabel">きょうの じかん</div><div class="cValue" id="cTime"></div></div>
+    <div class="cRow"><div class="cLabel">きょうの さぎょう</div><div class="cValue" id="cWork"></div></div>
+    <div class="cRow"><div class="cLabel">きょうの こうちん（がいさん）</div><div class="cValue" id="cWage"></div></div>
+    <div id="confirmBtns">
+      <button id="btnNg" onclick="onDiffer()">ちがう</button>
+      <button id="btnOk" onclick="onConfirm()">✓ かくにん</button>
+    </div>
+    <div id="staffCall">しょくいんを よんでください</div>
+  </div>
+
   <script>
     const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxoGn2hYOduL5Y2MH-PU_kQARERwjADfyT_GgWXRJ1gfQhUeNPXVlE3DL67nj-nb1sarw/exec";
 
@@ -52,13 +86,11 @@
     let busy = false;
     let lastResultAt = 0;
     let jsonpCounter = 0;
+    let confirmUid = null;
 
     function callApi(params, onSuccess, onError) {
       const cbName = "jsonp_cb_" + (jsonpCounter++);
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        onError(new Error("タイムアウト"));
-      }, 15000);
+      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 15000);
 
       function cleanup() {
         clearTimeout(timeoutId);
@@ -67,10 +99,7 @@
         if (s) s.remove();
       }
 
-      window[cbName] = function (data) {
-        cleanup();
-        onSuccess(data);
-      };
+      window[cbName] = function (data) { cleanup(); onSuccess(data); };
 
       const query = Object.keys(params).map(k =>
         encodeURIComponent(k) + "=" + encodeURIComponent(params[k])
@@ -86,6 +115,7 @@
     function onScanSuccess(decodedText) {
       const now = Date.now();
       if (busy || now - lastResultAt < 2000) return;
+      if (document.getElementById("confirmScreen").style.display === "flex") return;
       busy = true;
       lastResultAt = now;
       callApi({ uid: decodedText.trim() }, onScanResult, onScanError);
@@ -96,6 +126,11 @@
       if (res.status === "ok") {
         el.className = "ok";
         el.textContent = `${res.name}さん ${res.kubun === "来所" ? "おはようございます" : "おつかれさまでした"}（${res.time} 打刻）`;
+        // 退勤のときは当日サマリーを出して本人確認へ
+        if (res.kubun === "退所" && res.summary && res.summary.status === "ok") {
+          setTimeout(() => showConfirm(res.summary), 1200);
+          return;
+        }
       } else if (res.status === "duplicate") {
         el.className = "duplicate";
         el.textContent = `${res.name}さん、${res.message}`;
@@ -108,6 +143,46 @@
         el.textContent = "QRカードをかざしてください";
         busy = false;
       }, 3000);
+    }
+
+    function showConfirm(s) {
+      confirmUid = s.uid;
+      document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
+      const inTime = s.actualIn || s.planIn || "";
+      const outTime = s.actualOut || s.planOut || "";
+      document.getElementById("cTime").textContent = inTime + " 〜 " + outTime;
+      document.getElementById("cWork").textContent = (s.works && s.works.length) ? s.works.join("、") : "（未入力）";
+      document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
+      document.getElementById("staffCall").style.display = "none";
+      document.getElementById("confirmBtns").style.display = "flex";
+      document.getElementById("confirmScreen").style.display = "flex";
+    }
+
+    function hideConfirm() {
+      document.getElementById("confirmScreen").style.display = "none";
+      document.getElementById("message").className = "";
+      document.getElementById("message").textContent = "QRカードをかざしてください";
+      confirmUid = null;
+      busy = false;
+    }
+
+    function onConfirm() {
+      if (!confirmUid) return hideConfirm();
+      document.getElementById("confirmBtns").style.display = "none";
+      callApi({ uid: confirmUid, action: "confirm" }, () => {
+        document.getElementById("confirmName").textContent = "きろくしました ありがとうございました ✓";
+        setTimeout(hideConfirm, 3000);
+      }, () => {
+        document.getElementById("staffCall").textContent = "つうしんエラー しょくいんを よんでください";
+        document.getElementById("staffCall").style.display = "block";
+        setTimeout(hideConfirm, 6000);
+      });
+    }
+
+    function onDiffer() {
+      document.getElementById("confirmBtns").style.display = "none";
+      document.getElementById("staffCall").style.display = "block";
+      setTimeout(hideConfirm, 8000);
     }
 
     function onScanError() {
@@ -136,11 +211,7 @@
         document.getElementById("message").textContent = "カメラが見つかりません。手入力をご利用ください";
         return;
       }
-      html5QrCode.start(
-        cameraId,
-        { fps: 10, qrbox: 250 },
-        onScanSuccess
-      );
+      html5QrCode.start(cameraId, { fps: 10, qrbox: 250 }, onScanSuccess);
     }).catch(() => {
       document.getElementById("message").textContent = "カメラの起動に失敗しました。手入力をご利用ください";
     });
