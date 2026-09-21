@@ -132,6 +132,7 @@
         <span>退勤</span><input id="editOut" type="time">
         <button class="btn" onclick="saveTime('out')">保存</button>
       </div>
+      <div id="punchNote" style="font-size:3.2vw;color:#777;margin-top:1vw"></div>
 
       <label style="margin-top:3vw">昼食</label>
       <div class="slotRow">
@@ -219,9 +220,8 @@
     function showConfirm(s) {
       confirmUid = s.uid;
       document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
-      const inTime = s.actualIn || s.planIn || "";
-      const outTime = s.actualOut || s.planOut || "";
-      document.getElementById("cTime").textContent = inTime + " 〜 " + outTime;
+      // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
+      document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
       document.getElementById("cWork").textContent = (s.works && s.works.length) ? s.works.join("、") : "（未入力）";
       document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
       document.getElementById("staffCall").style.display = "none";
@@ -314,8 +314,11 @@
         callApi({ uid: confirmUid, action: "summary" }, (s) => {
           staffSummary = s;
           document.getElementById("staffTitle").textContent = s.name + " さんの記録を修正";
-          document.getElementById("editIn").value = s.actualIn || s.planIn || "";
-          document.getElementById("editOut").value = s.actualOut || s.planOut || "";
+          // 編集対象は予定時刻。実際の打刻時刻は参考として下に表示する。
+          document.getElementById("editIn").value = s.planIn || "";
+          document.getElementById("editOut").value = s.planOut || "";
+          document.getElementById("punchNote").textContent =
+            "実際の打刻： 出勤 " + (s.actualIn || "なし") + " ／ 退勤 " + (s.actualOut || "なし");
           lunchSel.value = s.lunch || "なし";
           buildSlotList(s);
           document.getElementById("editBox").style.display = "block";
