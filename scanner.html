@@ -80,6 +80,7 @@
     .slotWarn { border: 2px solid #B71C1C; background: #FFF3F3; }
     .slotWarn .slotHead { color: #B71C1C; }
     .slotBox select { margin-bottom: 2vw; }
+    .restLabel { font-size: 3.4vw; color: #1F4E79; margin: 1vw 0; font-weight: bold; }
     .slotBox .btn { font-size: 3.6vw; padding: 2vw 3.5vw; margin-top: 0; }
     #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
     #staffWho { font-size: 3.6vw; color: #1B5E20; }
@@ -352,7 +353,7 @@
           sel.appendChild(op);
         });
         sel.value = (s.slotTasks && s.slotTasks[i]) || "";
-        sel.onchange = () => saveWork(i, sel.value);
+        sel.onchange = () => saveWork(i, sel.value, "1");
         wrap.appendChild(sel);
 
         // 実際に作業した時間（途中で抜けた場合だけ入力）
@@ -374,6 +375,26 @@
         clr.onclick = () => { inp.value = ""; saveSlotTime(i, ""); };
         line.appendChild(lab); line.appendChild(inp); line.appendChild(btn); line.appendChild(clr);
         wrap.appendChild(line);
+
+        // 2つ目の作業（作業①に実時間を入れると、その枠の残り時間を担当する）
+        if (info.rest) {
+          const lab2 = document.createElement("div");
+          lab2.className = "restLabel";
+          lab2.textContent = "残り " + info.rest + " の作業";
+          const sel2 = document.createElement("select");
+          const b2 = document.createElement("option");
+          b2.value = ""; b2.textContent = "（作業なし）";
+          sel2.appendChild(b2);
+          taskList.forEach(name => {
+            const op = document.createElement("option");
+            op.value = name; op.textContent = name;
+            sel2.appendChild(op);
+          });
+          sel2.value = (s.slotTasks2 && s.slotTasks2[i]) || "";
+          sel2.onchange = () => saveWork(i, sel2.value, "2");
+          wrap.appendChild(lab2);
+          wrap.appendChild(sel2);
+        }
 
         box.appendChild(wrap);
       });
@@ -421,8 +442,9 @@
         afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
-    function saveWork(slotIndex, task) {
-      callApi(withPin({ uid: confirmUid, action: "updateWork", slot: slotIndex, task: task }), afterSave,
+    function saveWork(slotIndex, task, which) {
+      callApi(withPin({ uid: confirmUid, action: "updateWork", slot: slotIndex, task: task, which: which || "1" }),
+        (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
         () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
