@@ -77,6 +77,8 @@
     .slotRow span { font-size: 3.4vw; width: 26vw; flex-shrink: 0; }
     .slotBox { border: 1px solid #e0e0e0; border-radius: 8px; padding: 2vw; margin-bottom: 2.5vw; background: #FCFCFC; }
     .slotHead { font-size: 4vw; font-weight: bold; color: #1F4E79; margin-bottom: 1.5vw; }
+    .slotWarn { border: 2px solid #B71C1C; background: #FFF3F3; }
+    .slotWarn .slotHead { color: #B71C1C; }
     .slotBox select { margin-bottom: 2vw; }
     .slotBox .btn { font-size: 3.6vw; padding: 2vw 3.5vw; margin-top: 0; }
     #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
@@ -329,11 +331,11 @@
         if (!info.available) return;   // 通所時間外の枠は出さない
 
         const wrap = document.createElement("div");
-        wrap.className = "slotBox";
+        wrap.className = info.warn ? "slotBox slotWarn" : "slotBox";
 
         const head = document.createElement("div");
         head.className = "slotHead";
-        head.textContent = label;
+        head.textContent = info.warn ? "⚠ " + label + "（作業が未選択）" : label;
         wrap.appendChild(head);
 
         // 作業内容
@@ -386,12 +388,21 @@
     }
 
     function afterSave(res) {
+      const msg = document.getElementById("staffMsg");
       if (res.status === "ok") {
         staffSummary = res;
-        document.getElementById("staffMsg").textContent =
-          "保存しました（" + res.minutes + "分 / " + Number(res.wage || 0).toLocaleString() + "円）";
+        let text = "保存しました（" + res.minutes + "分 / " + Number(res.wage || 0).toLocaleString() + "円）";
+        // 時間だけ入れて作業を選び忘れると0分になってしまうため、気づけるようにする
+        if (res.warnSlots && res.warnSlots.length) {
+          text += "　⚠ " + res.warnSlots.join("、") + " は時間が入っていますが作業が未選択です（0分になります）";
+          msg.style.color = "#B71C1C";
+        } else {
+          msg.style.color = "#1B5E20";
+        }
+        msg.textContent = text;
       } else {
-        document.getElementById("staffMsg").textContent = res.message || "保存できませんでした";
+        msg.style.color = "#B71C1C";
+        msg.textContent = res.message || "保存できませんでした";
       }
     }
 
