@@ -21,10 +21,11 @@
     .ok { color: #1B5E20; font-weight: bold; }
     .invalid { color: #B71C1C; font-weight: bold; }
     .duplicate { color: #888; }
-    #manualBtn {
+    #manualBtn, #staffBtn {
       margin-top: 16px; padding: 12px 24px; font-size: 4vw; border-radius: 8px;
       border: 1px solid #999; background: white;
     }
+    #staffBtn { margin-left: 8px; border-color: #1F4E79; color: #1F4E79; }
     #manualBox { display: none; margin-top: 16px; }
     #manualBox input { font-size: 5vw; padding: 8px; width: 40vw; }
     #manualBox button { font-size: 5vw; padding: 8px 16px; }
@@ -90,6 +91,7 @@
   <div id="reader"></div>
   <div id="message">QRカードをかざしてください</div>
   <button id="manualBtn" onclick="showManual()">手入力</button>
+  <button id="staffBtn" onclick="openStaffPick()">職員メニュー</button>
   <div id="manualBox">
     <input id="manualId" placeholder="利用者ID (例: S001)">
     <button onclick="submitManual()">送信</button>
@@ -120,6 +122,19 @@
       <label>暗証番号</label>
       <input id="pinInput" type="password" inputmode="numeric">
       <button class="btn" onclick="doStaffAuth()">確認</button>
+      <button class="btn btnGray" onclick="closeStaff()">やめる</button>
+    </div>
+
+    <!-- 日中に修正する時: 誰の記録を直すか選ぶ -->
+    <div class="box" id="pickBox" style="display:none">
+      <label>どなたの記録を直しますか</label>
+      <div style="font-size:3.6vw;color:#1B5E20;margin-bottom:2vw">
+        QRカードをかざすか、利用者IDを入力してください
+      </div>
+      <div class="slotRow">
+        <input id="pickId" type="text" placeholder="例: S001">
+        <button class="btn" onclick="pickTarget()">開く</button>
+      </div>
       <button class="btn btnGray" onclick="closeStaff()">やめる</button>
     </div>
 
@@ -160,6 +175,7 @@
     let lastResultAt = 0;
     let jsonpCounter = 0;
     let confirmUid = null;
+    let staffPickMode = false;   // 日中の修正で、対象者をこれから選ぶ状態
 
     // 読み取りだけの操作。失敗しても安全にやり直せる（書き込み系は二重記録になるのでやり直さない）
     const RETRYABLE = ["summary", "taskList", "staffAuth"];
@@ -200,6 +216,13 @@
     function onScanSuccess(decodedText) {
       const now = Date.now();
       if (busy || now - lastResultAt < 2000) return;
+      // 職員が対象者を選んでいる最中は、打刻せずにその人の記録を開く
+      if (staffPickMode && document.getElementById("pickBox").style.display === "block") {
+        lastResultAt = now;
+        pickTarget(decodedText.trim());
+        return;
+      }
+      if (document.getElementById("staffScreen").style.display === "flex") return;
       if (document.getElementById("confirmScreen").style.display === "flex") return;
       busy = true;
       lastResultAt = now;
@@ -275,20 +298,52 @@
     let staffSummary = null;
     let taskList = [];
 
+    // 退勤時の確認画面から入る（対象者は確定済み）
     function openStaff() {
+      staffPickMode = false;
+      showStaffScreen();
+    }
+
+    // メイン画面から入る（日中の修正。対象者をこれから選ぶ）
+    function openStaffPick() {
+      staffPickMode = true;
+      confirmUid = null;
+      showStaffScreen();
+    }
+
+    function showStaffScreen() {
       document.getElementById("staffScreen").style.display = "flex";
       document.getElementById("pinBox").style.display = "block";
+      document.getElementById("pickBox").style.display = "none";
       document.getElementById("editBox").style.display = "none";
+      document.getElementById("staffTitle").textContent = "職員モード";
       document.getElementById("staffMsg").textContent = "";
       document.getElementById("staffWho").textContent = "";
       document.getElementById("pinInput").value = "";
+      document.getElementById("pickId").value = "";
       staffName = null;
+    }
+
+    // 対象者を選ぶ（QRをかざす／IDを入力）
+    function pickTarget(uid) {
+      const id = (uid || document.getElementById("pickId").value || "").trim();
+      if (!id) return;
+      confirmUid = id;
+      document.getElementById("pickBox").style.display = "none";
+      document.getElementById("staffMsg").textContent = "読み込み中...";
+      loadEditor();
     }
 
     function closeStaff() {
       document.getElementById("staffScreen").style.display = "none";
       staffName = null;
-      // 修正後の内容で本人の確認画面に戻す
+      if (staffPickMode) {      // 日中の修正。本人確認は退勤時に行う
+        staffPickMode = false;
+        confirmUid = null;
+        hideConfirm();
+        return;
+      }
+      // 退勤時の修正。直した内容で本人の確認画面に戻す
       if (confirmUid) {
         callApi({ uid: confirmUid, action: "summary" }, (s) => {
           if (s.status === "ok") showConfirm(s); else hideConfirm();
@@ -311,6 +366,10 @@
         document.getElementById("staffMsg").textContent = "";
         document.getElementById("staffWho").textContent = staffName + " さんとして修正します";
         document.getElementById("pinBox").style.display = "none";
+        if (staffPickMode && !confirmUid) {
+          document.getElementById("pickBox").style.display = "block";
+          return;
+        }
         loadEditor();
       }, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
@@ -325,6 +384,16 @@
           op.value = o; op.textContent = o; lunchSel.appendChild(op);
         });
         callApi({ uid: confirmUid, action: "summary" }, (s) => {
+          if (s.status !== "ok") {
+            // IDの打ち間違いや、本日の予定が無い場合
+            document.getElementById("staffMsg").textContent = s.message || "この方の本日の記録が見つかりません";
+            document.getElementById("editBox").style.display = "none";
+            if (staffPickMode) {
+              confirmUid = null;
+              document.getElementById("pickBox").style.display = "block";
+            }
+            return;
+          }
           staffSummary = s;
           document.getElementById("staffTitle").textContent = s.name + " さんの記録を修正";
           // 編集対象は予定時刻。実際の打刻時刻は参考として下に表示する。
