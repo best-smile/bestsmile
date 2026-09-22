@@ -46,9 +46,12 @@
     .cValue { font-size: 7vw; font-weight: bold; color: #222; }
     .dRow { border-top: 1px solid #C5E1A5; padding: 2vw 0; }
     .dRow:first-child { border-top: none; }
-    .dTask { font-size: 5.5vw; font-weight: bold; color: #222; }
+    .dTime { font-size: 5.5vw; font-weight: bold; color: #1B5E20; }
+    .dLine { display: flex; justify-content: space-between; align-items: baseline; gap: 2vw; margin-top: 0.5vw; }
+    .dTask { font-size: 5vw; font-weight: bold; color: #222; }
     .dCalc { font-size: 4.5vw; color: #444; margin-top: 0.5vw; }
-    .dAmount { font-weight: bold; color: #1B5E20; }
+    .dRate { font-size: 3.8vw; color: #666; }
+    .dAmount { font-size: 5.5vw; font-weight: bold; color: #1B5E20; white-space: nowrap; }
     #cTotalRow { background: #E8F5E9; border: 2px solid #2E7D32; }
     #confirmBtns { display: flex; gap: 4vw; margin-top: 3vw; }
     #confirmBtns button {
@@ -297,12 +300,14 @@
     }
 
 
-    // 作業ごとに「単価 × 時間 = 小計」を並べる。合計だけ見せて確認させないため。
+    // 「何時から何時まで／どの作業／工賃」を時間の順に並べる。合計だけ見せて確認させないため。
     function buildDetail(s) {
       const box = document.getElementById("cDetail");
       box.innerHTML = "";
-      const list = s.breakdown || [];
+      const list = s.timeline || [];
       if (!list.length) {
+        // 古いGASのまま（timeline が無い）なら、作業ごとの内訳で出す
+        if ((s.breakdown || []).length) return buildDetailByTask(s, box);
         const p = document.createElement("div");
         p.className = "dTask";
         p.textContent = "（さぎょうが まだ はいっていません）";
@@ -310,6 +315,35 @@
         return;
       }
       list.forEach(function (w) {
+        const row = document.createElement("div");
+        row.className = "dRow";
+
+        const time = document.createElement("div");
+        time.className = "dTime";
+        time.textContent = w.from + " 〜 " + w.to;
+
+        const line = document.createElement("div");
+        line.className = "dLine";
+        const t = document.createElement("div");
+        t.className = "dTask";
+        t.textContent = w.task;
+        const a = document.createElement("div");
+        a.className = "dAmount";
+        a.textContent = Number(w.amount).toLocaleString() + "円";
+        line.appendChild(t); line.appendChild(a);
+
+        const r = document.createElement("div");
+        r.className = "dRate";
+        r.textContent = Number(w.rate).toLocaleString() + "円／じかん";
+
+        row.appendChild(time); row.appendChild(line); row.appendChild(r);
+        box.appendChild(row);
+      });
+    }
+
+    // 旧表示（作業ごとに「単価 × 時間 = 小計」）。GASを差し替えるまでの保険。
+    function buildDetailByTask(s, box) {
+      s.breakdown.forEach(function (w) {
         const row = document.createElement("div");
         row.className = "dRow";
         const t = document.createElement("div");
