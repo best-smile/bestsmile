@@ -30,6 +30,7 @@
     #manualBox input { font-size: 5vw; padding: 8px; width: 40vw; }
     #manualBox button { font-size: 5vw; padding: 8px 16px; }
     #configNote { font-size: 3vw; color: #B71C1C; margin-top: 8px; text-align: center; padding: 0 16px; }
+    #appVer { font-size: 2.6vw; color: #999; margin-top: 6px; text-align: center; }
 
     /* 退勤時の本人確認画面 */
     #confirmScreen {
@@ -134,6 +135,8 @@
     <button onclick="submitManual()">送信</button>
   </div>
   <div id="configNote"></div>
+  <!-- タブレットが古いファイルを掴んでいないか、その場で見分けるための版番号 -->
+  <div id="appVer"></div>
 
   <!-- 退勤時の本人確認 -->
   <div id="confirmScreen">
@@ -223,6 +226,10 @@
         "設定が未完了です（scanner.html内のWEBAPP_URLを書き換えてください）";
     }
 
+    // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
+    const APP_VERSION = "v2026-09-22d";
+    document.getElementById("appVer").textContent = APP_VERSION;
+
     let busy = false;
     let lastResultAt = 0;
     let jsonpCounter = 0;
@@ -285,11 +292,21 @@
       const el = document.getElementById("message");
       if (res.status === "ok") {
         el.className = "ok";
-        el.textContent = `${res.name}さん ${res.kubun === "来所" ? "おはようございます" : "おつかれさまでした"}（${res.time} 打刻）`;
+        // 来所か退所かを必ず出す。来所だと確認画面は出ないので、どちらで打刻されたか分からないと困る。
+        el.textContent = res.kubun === "来所"
+          ? `${res.name}さん おはようございます（${res.time} 来所）`
+          : `${res.name}さん おつかれさまでした（${res.time} 退所）`;
         // 退勤のときは当日サマリーを出して本人確認へ
-        if (res.kubun === "退所" && res.summary && res.summary.status === "ok") {
-          setTimeout(() => showConfirm(res.summary), 1200);
-          return;
+        if (res.kubun === "退所") {
+          if (res.summary && res.summary.status === "ok") {
+            setTimeout(() => showConfirm(res.summary), 1200);
+            return;
+          }
+          // 確認画面を出せない時は理由を出す。黙って出ないと原因が分からなくなるため。
+          el.className = "invalid";
+          el.textContent = `${res.name}さん ${res.time} 打刻しました　※` +
+            ((res.summary && res.summary.message) || "きょうの きろくが よみとれません") +
+            "（しょくいんを よんでください）";
         }
       } else if (res.status === "duplicate") {
         el.className = "duplicate";
@@ -306,16 +323,24 @@
     }
 
     function showConfirm(s) {
-      confirmUid = s.uid;
-      document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
-      // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
-      document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
-      buildDetail(s);
-      document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
-      document.getElementById("staffCall").style.display = "none";
-      document.getElementById("staffEnter").style.display = "none";
-      document.getElementById("confirmBtns").style.display = "flex";
-      document.getElementById("confirmScreen").style.display = "flex";
+      try {
+        confirmUid = s.uid;
+        document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
+        // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
+        document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
+        buildDetail(s);
+        document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
+        document.getElementById("staffCall").style.display = "none";
+        document.getElementById("staffEnter").style.display = "none";
+        document.getElementById("confirmBtns").style.display = "flex";
+        document.getElementById("confirmScreen").style.display = "flex";
+      } catch (e) {
+        // 画面を作る途中で失敗すると、打刻だけ済んで何も出ない状態になる。理由を出す。
+        const el = document.getElementById("message");
+        el.className = "invalid";
+        el.textContent = "かくにん がめんを ひらけません（しょくいんを よんでください）: " + e.message;
+        busy = false;
+      }
     }
 
 
@@ -752,7 +777,11 @@
     }
 
     function onScanError() {
-      document.getElementById("message").textContent = "通信エラー。もう一度お試しください";
+      // 打刻はサーバー側で先に済んでいることがある。すぐ読み直すと「連続読み取り」で弾かれるため、
+      // 「もう一度」ではなく職員に知らせる案内にする。
+      const el = document.getElementById("message");
+      el.className = "invalid";
+      el.textContent = "つうしんエラー。うちこくは きろくされて いるかも しれません（しょくいんを よんでください）";
       busy = false;
     }
 
