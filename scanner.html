@@ -72,8 +72,11 @@
       border-radius: 10px; padding: 3vw; margin-bottom: 3vw;
     }
     #staffScreen label { font-size: 3.6vw; color: #555; display: block; margin-bottom: 1vw; }
-    #staffScreen input, #staffScreen select {
+    #staffScreen input:not([type=checkbox]), #staffScreen select {
       font-size: 4.5vw; padding: 2vw; width: 100%; box-sizing: border-box;
+    }
+    #staffScreen input[type=checkbox] {
+      width: 8vw; height: 8vw; flex-shrink: 0; margin: 0;
     }
     #staffScreen .btn {
       font-size: 4.5vw; padding: 3vw 6vw; border-radius: 10px; border: none;
@@ -91,8 +94,8 @@
     .slotBox .btn { font-size: 3.6vw; padding: 2vw 3.5vw; margin-top: 0; }
     #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
     #staffWho { font-size: 3.6vw; color: #1B5E20; }
-    .aRow { display: flex; align-items: center; gap: 2vw; padding: 2vw 0; border-bottom: 1px solid #eee; }
-    .aRow input[type=checkbox] { width: 7vw; height: 7vw; flex-shrink: 0; }
+    #attendList { max-height: 55vh; overflow-y: auto; margin-bottom: 2vw; }
+    .aRow { display: flex; align-items: center; gap: 3vw; padding: 2.5vw 0; border-bottom: 1px solid #eee; }
     .aName { font-size: 4.2vw; font-weight: bold; flex: 1; }
     .aInfo { font-size: 3.2vw; color: #666; }
     .aPunch { font-size: 3vw; color: #1B5E20; font-weight: bold; }
@@ -466,7 +469,8 @@
     function saveAttendance() {
       const ids = [];
       dayList.forEach(function (p, i) {
-        if (document.getElementById("att_" + i).checked) ids.push(p.uid);
+        const cb = document.getElementById("att_" + i);
+        if (cb && cb.checked) ids.push(p.uid);
       });
       document.getElementById("staffMsg").style.color = "#555";
       document.getElementById("staffMsg").textContent = "登録中...";
