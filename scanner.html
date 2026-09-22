@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>蜃ｺ蟶ｭQR謇灘綾</title>
+  <title>出席QR打刻</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     html, body {
@@ -32,21 +32,21 @@
     #configNote { font-size: 3vw; color: #B71C1C; margin-top: 8px; text-align: center; padding: 0 16px; }
     #appVer { font-size: 2.6vw; color: #999; margin-top: 6px; text-align: center; }
 
-    /* 騾蜍､譎ゅ・譛ｬ莠ｺ遒ｺ隱咲判髱｢ */
+    /* 退勤時の本人確認画面 */
     #confirmScreen {
       display: none; position: fixed; inset: 0; background: #fff; z-index: 10;
       flex-direction: column; align-items: center; padding: 4vw;
       box-sizing: border-box; text-align: center;
-      /* 菴懈･ｭ縺悟､壹＞譌･縺ｯ荳ｭ霄ｫ縺檎判髱｢繧医ｊ鬮倥￥縺ｪ繧九ゆｸ翫°繧我ｸｦ縺ｹ縺ｦ繧ｹ繧ｯ繝ｭ繝ｼ繝ｫ縺ｧ縺阪ｋ繧医≧縺ｫ縺励↑縺・→
-         縲後°縺上↓繧薙阪・繧ｿ繝ｳ縺檎判髱｢縺ｮ螟悶↓蜃ｺ縺ｦ縺励∪縺・・*/
+      /* 作業が多い日は中身が画面より高くなる。上から並べてスクロールできるようにしないと
+         「かくにん」ボタンが画面の外に出てしまう。 */
       justify-content: flex-start; overflow: hidden;
     }
-    /* 荳奇ｼ亥錐蜑阪・譎る俣・会ｼ丈ｸｭ・医＠縺斐→縺ｮ蜀・ｨｳ・昴≠縺ｵ繧後◆繧峨％縺薙□縺代せ繧ｯ繝ｭ繝ｼ繝ｫ・会ｼ丈ｸ具ｼ医％縺・■繧薙・繝懊ち繝ｳ・峨・
-       縺薙≧縺励↑縺・→菴懈･ｭ縺悟､壹＞譌･縺ｫ蜷郁ｨ医→繝懊ち繝ｳ縺檎判髱｢縺ｮ螟悶∈蜃ｺ縺ｦ縺励∪縺・・*/
+    /* 上（名前・時間）／中（しごとの内訳＝あふれたらここだけスクロール）／下（こうちん・ボタン）。
+       こうしないと作業が多い日に合計とボタンが画面の外へ出てしまう。 */
     #confirmName {
       flex: 0 0 auto; font-size: 5.5vw; font-weight: bold; color: #1B5E20; margin-bottom: 2vw;
     }
-    /* 縺倥°繧薙・1陦後↓縺ｾ縺ｨ繧√ｋ縲ゅ＠縺斐→縺ｮ蜀・ｨｳ縺ｫ鬮倥＆繧貞屓縺吶◆繧√・*/
+    /* じかんは1行にまとめる。しごとの内訳に高さを回すため。 */
     #cTimeRow { display: flex; align-items: baseline; justify-content: space-between; gap: 3vw; }
     #cTimeRow .cLabel { margin-bottom: 0; }
     #cTimeRow .cValue { font-size: 5.5vw; }
@@ -61,7 +61,7 @@
     }
     .cLabel { font-size: 4vw; color: #555; margin-bottom: 1.5vw; }
     .cValue { font-size: 7vw; font-weight: bold; color: #222; }
-    /* 菴懈･ｭ縺悟､壹＞譌･縺ｯ縲√％縺ｮ谺・□縺代′繧ｹ繧ｯ繝ｭ繝ｼ繝ｫ縺吶ｋ */
+    /* 作業が多い日は、この欄だけがスクロールする */
     #cDetail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     .dRow { border-top: 1px solid #C5E1A5; padding: 1.5vw 0; }
     .dRow:first-child { border-top: none; }
@@ -83,7 +83,7 @@
     #staffEnter { display: none; margin-top: 4vw; }
     #staffEnter button { font-size: 4.5vw; padding: 3vw 6vw; border-radius: 10px; border: 1px solid #555; background: #fff; }
 
-    /* 閨ｷ蜩｡繝｢繝ｼ繝・*/
+    /* 職員モード */
     #staffScreen {
       display: none; position: fixed; inset: 0; background: #FAFAFA; z-index: 20;
       flex-direction: column; align-items: center; padding: 4vw; box-sizing: border-box;
@@ -127,94 +127,94 @@
 </head>
 <body>
   <div id="reader"></div>
-  <div id="message">QR繧ｫ繝ｼ繝峨ｒ縺九＊縺励※縺上□縺輔＞</div>
-  <button id="manualBtn" onclick="showManual()">謇句・蜉・/button>
-  <button id="staffBtn" onclick="openStaffPick()">閨ｷ蜩｡繝｡繝九Η繝ｼ</button>
+  <div id="message">QRカードをかざしてください</div>
+  <button id="manualBtn" onclick="showManual()">手入力</button>
+  <button id="staffBtn" onclick="openStaffPick()">職員メニュー</button>
   <div id="manualBox">
-    <input id="manualId" placeholder="蛻ｩ逕ｨ閠・D (萓・ S001)">
-    <button onclick="submitManual()">騾∽ｿ｡</button>
+    <input id="manualId" placeholder="利用者ID (例: S001)">
+    <button onclick="submitManual()">送信</button>
   </div>
   <div id="configNote"></div>
-  <!-- 繧ｿ繝悶Ξ繝・ヨ縺悟商縺・ヵ繧｡繧､繝ｫ繧呈雫繧薙〒縺・↑縺・°縲√◎縺ｮ蝣ｴ縺ｧ隕句・縺代ｋ縺溘ａ縺ｮ迚育分蜿ｷ -->
+  <!-- タブレットが古いファイルを掴んでいないか、その場で見分けるための版番号 -->
   <div id="appVer"></div>
 
-  <!-- 騾蜍､譎ゅ・譛ｬ莠ｺ遒ｺ隱・-->
+  <!-- 退勤時の本人確認 -->
   <div id="confirmScreen">
     <div id="confirmName"></div>
-    <div class="cRow" id="cTimeRow"><div class="cLabel">縺阪ｇ縺・・ 縺倥°繧・/div><div class="cValue" id="cTime"></div></div>
-    <div class="cRow" id="cWorkRow"><div class="cLabel">縺阪ｇ縺・・ 縺励＃縺ｨ</div><div id="cDetail"></div></div>
-    <div class="cRow" id="cTotalRow"><div class="cLabel">縺阪ｇ縺・・ 縺薙≧縺｡繧・/div><div class="cValue" id="cWage"></div></div>
+    <div class="cRow" id="cTimeRow"><div class="cLabel">きょうの じかん</div><div class="cValue" id="cTime"></div></div>
+    <div class="cRow" id="cWorkRow"><div class="cLabel">きょうの しごと</div><div id="cDetail"></div></div>
+    <div class="cRow" id="cTotalRow"><div class="cLabel">きょうの こうちん</div><div class="cValue" id="cWage"></div></div>
     <div id="confirmBtns">
-      <button id="btnNg" onclick="onDiffer()">縺｡縺後≧</button>
-      <button id="btnOk" onclick="onConfirm()">笨・縺九￥縺ｫ繧・/button>
+      <button id="btnNg" onclick="onDiffer()">ちがう</button>
+      <button id="btnOk" onclick="onConfirm()">✓ かくにん</button>
     </div>
-    <div id="staffCall">縺励ｇ縺上＞繧薙ｒ 繧医ｓ縺ｧ縺上□縺輔＞</div>
-    <div id="staffEnter"><button onclick="openStaff()">閨ｷ蜩｡縺ｮ譁ｹ縺ｯ縺薙■繧・/button></div>
+    <div id="staffCall">しょくいんを よんでください</div>
+    <div id="staffEnter"><button onclick="openStaff()">職員の方はこちら</button></div>
   </div>
 
-  <!-- 閨ｷ蜩｡繝｢繝ｼ繝会ｼ域囓險ｼ逡ｪ蜿ｷ縺ｧ菫晁ｭｷ・・-->
+  <!-- 職員モード（暗証番号で保護） -->
   <div id="staffScreen">
-    <h2 id="staffTitle">閨ｷ蜩｡繝｢繝ｼ繝・/h2>
+    <h2 id="staffTitle">職員モード</h2>
     <div id="staffWho"></div>
     <div id="staffMsg"></div>
 
     <div class="box" id="pinBox">
-      <label>證苓ｨｼ逡ｪ蜿ｷ</label>
+      <label>暗証番号</label>
       <input id="pinInput" type="password" inputmode="numeric">
-      <button class="btn" onclick="doStaffAuth()">遒ｺ隱・/button>
-      <button class="btn btnGray" onclick="closeStaff()">繧・ａ繧・/button>
+      <button class="btn" onclick="doStaffAuth()">確認</button>
+      <button class="btn btnGray" onclick="closeStaff()">やめる</button>
     </div>
 
-    <!-- 譛ｬ譌･縺ｮ蜃ｺ蟶ｭ荳隕ｧ・医∪縺ｨ繧√※繝√ぉ繝・け・・-->
+    <!-- 本日の出席一覧（まとめてチェック） -->
     <div class="box" id="listBox" style="display:none">
-      <label id="listLabel">譛ｬ譌･縺ｮ蜃ｺ蟶ｭ</label>
+      <label id="listLabel">本日の出席</label>
       <div id="attendList"></div>
-      <button class="btn" onclick="saveAttendance()">逋ｻ骭ｲ縺吶ｋ</button>
-      <button class="btn btnGray" onclick="backToMenu()">繧ゅ←繧・/button>
+      <button class="btn" onclick="saveAttendance()">登録する</button>
+      <button class="btn btnGray" onclick="backToMenu()">もどる</button>
     </div>
 
-    <!-- 閨ｷ蜩｡繝｡繝九Η繝ｼ -->
+    <!-- 職員メニュー -->
     <div class="box" id="menuBox" style="display:none">
-      <button class="btn" onclick="openAttendList()">譛ｬ譌･縺ｮ蜃ｺ蟶ｭ繧偵メ繧ｧ繝・け縺吶ｋ</button>
-      <button class="btn" onclick="showPick()">險倬鹸繧剃ｿｮ豁｣縺吶ｋ</button>
-      <button class="btn btnGray" onclick="closeStaff()">縺ｨ縺倥ｋ</button>
+      <button class="btn" onclick="openAttendList()">本日の出席をチェックする</button>
+      <button class="btn" onclick="showPick()">記録を修正する</button>
+      <button class="btn btnGray" onclick="closeStaff()">とじる</button>
     </div>
 
-    <!-- 譌･荳ｭ縺ｫ菫ｮ豁｣縺吶ｋ譎・ 隱ｰ縺ｮ險倬鹸繧堤峩縺吶°驕ｸ縺ｶ -->
+    <!-- 日中に修正する時: 誰の記録を直すか選ぶ -->
     <div class="box" id="pickBox" style="display:none">
-      <label>縺ｩ縺ｪ縺溘・險倬鹸繧堤峩縺励∪縺吶°</label>
+      <label>どなたの記録を直しますか</label>
       <div style="font-size:3.6vw;color:#1B5E20;margin-bottom:2vw">
-        QR繧ｫ繝ｼ繝峨ｒ縺九＊縺吶°縲∝茜逕ｨ閠・D繧貞・蜉帙＠縺ｦ縺上□縺輔＞
+        QRカードをかざすか、利用者IDを入力してください
       </div>
       <div class="slotRow">
-        <input id="pickId" type="text" placeholder="萓・ S001">
-        <button class="btn" onclick="pickTarget()">髢九￥</button>
+        <input id="pickId" type="text" placeholder="例: S001">
+        <button class="btn" onclick="pickTarget()">開く</button>
       </div>
-      <button class="btn btnGray" onclick="closeStaff()">繧・ａ繧・/button>
+      <button class="btn btnGray" onclick="closeStaff()">やめる</button>
     </div>
 
     <div class="box" id="editBox" style="display:none">
-      <label>蜃ｺ蜍､繝ｻ騾蜍､譎ょ綾</label>
+      <label>出勤・退勤時刻</label>
       <div class="slotRow">
-        <span>蜃ｺ蜍､</span><input id="editIn" type="time">
-        <button class="btn" onclick="saveTime('in')">菫晏ｭ・/button>
+        <span>出勤</span><input id="editIn" type="time">
+        <button class="btn" onclick="saveTime('in')">保存</button>
       </div>
       <div class="slotRow">
-        <span>騾蜍､</span><input id="editOut" type="time">
-        <button class="btn" onclick="saveTime('out')">菫晏ｭ・/button>
+        <span>退勤</span><input id="editOut" type="time">
+        <button class="btn" onclick="saveTime('out')">保存</button>
       </div>
       <div id="punchNote" style="font-size:3.2vw;color:#777;margin-top:1vw"></div>
 
-      <label style="margin-top:3vw">譏ｼ鬟・/label>
+      <label style="margin-top:3vw">昼食</label>
       <div class="slotRow">
         <select id="editLunch"></select>
-        <button class="btn" onclick="saveLunch()">菫晏ｭ・/button>
+        <button class="btn" onclick="saveLunch()">保存</button>
       </div>
 
-      <label style="margin-top:3vw">菴懈･ｭ蜀・ｮｹ・域凾髢灘ｸｯ縺斐→・・/label>
+      <label style="margin-top:3vw">作業内容（時間帯ごと）</label>
       <div id="slotList"></div>
 
-      <button class="btn btnGray" onclick="closeStaff()">菫ｮ豁｣繧堤ｵゅ∴縺ｦ謌ｻ繧・/button>
+      <button class="btn btnGray" onclick="closeStaff()">修正を終えて戻る</button>
     </div>
   </div>
 
@@ -223,10 +223,10 @@
 
     if (WEBAPP_URL.indexOf("WEBAPP_URL_HERE") !== -1) {
       document.getElementById("configNote").textContent =
-        "險ｭ螳壹′譛ｪ螳御ｺ・〒縺呻ｼ・canner.html蜀・・WEBAPP_URL繧呈嶌縺肴鋤縺医※縺上□縺輔＞・・;
+        "設定が未完了です（scanner.html内のWEBAPP_URLを書き換えてください）";
     }
 
-    // 逕ｻ髱｢繧堤峩縺励◆繧牙ｿ・★荳翫￡繧九ゅち繝悶Ξ繝・ヨ縺悟商縺・ヵ繧｡繧､繝ｫ繧定｡ｨ遉ｺ縺励※縺・↑縺・°縺ｮ遒ｺ隱阪↓菴ｿ縺・・
+    // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
     const APP_VERSION = "v2026-09-22e";
     document.getElementById("appVer").textContent = APP_VERSION;
 
@@ -234,15 +234,15 @@
     let lastResultAt = 0;
     let jsonpCounter = 0;
     let confirmUid = null;
-    let staffPickMode = false;   // 譌･荳ｭ縺ｮ菫ｮ豁｣縺ｧ縲∝ｯｾ雎｡閠・ｒ縺薙ｌ縺九ｉ驕ｸ縺ｶ迥ｶ諷・
+    let staffPickMode = false;   // 日中の修正で、対象者をこれから選ぶ状態
 
-    // 隱ｭ縺ｿ蜿悶ｊ縺縺代・謫堺ｽ懊ょ､ｱ謨励＠縺ｦ繧ょｮ牙・縺ｫ繧・ｊ逶ｴ縺帙ｋ・域嶌縺崎ｾｼ縺ｿ邉ｻ縺ｯ莠碁㍾險倬鹸縺ｫ縺ｪ繧九・縺ｧ繧・ｊ逶ｴ縺輔↑縺・ｼ・
+    // 読み取りだけの操作。失敗しても安全にやり直せる（書き込み系は二重記録になるのでやり直さない）
     const RETRYABLE = ["summary", "taskList", "staffAuth"];
 
     function callApi(params, onSuccess, onError) {
       const retryable = RETRYABLE.indexOf(params.action) !== -1;
       callApiOnce(params, onSuccess, function (err) {
-        // Apps Script縺ｯ荵・＠縺ｶ繧翫・螳溯｡後□縺ｨ襍ｷ蜍輔↓譎る俣縺後°縺九ｋ縺薙→縺後≠繧九◆繧√∽ｸ蠎ｦ縺縺代ｄ繧顔峩縺・
+        // Apps Scriptは久しぶりの実行だと起動に時間がかかることがあるため、一度だけやり直す
         if (retryable) callApiOnce(params, onSuccess, onError);
         else onError(err);
       });
@@ -250,7 +250,7 @@
 
     function callApiOnce(params, onSuccess, onError) {
       const cbName = "jsonp_cb_" + (jsonpCounter++);
-      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("繧ｿ繧､繝繧｢繧ｦ繝・)); }, 30000);
+      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 30000);
 
       function cleanup() {
         clearTimeout(timeoutId);
@@ -268,14 +268,14 @@
       const script = document.createElement("script");
       script.id = cbName;
       script.src = WEBAPP_URL + "?" + query;
-      script.onerror = () => { cleanup(); onError(new Error("騾壻ｿ｡繧ｨ繝ｩ繝ｼ")); };
+      script.onerror = () => { cleanup(); onError(new Error("通信エラー")); };
       document.body.appendChild(script);
     }
 
     function onScanSuccess(decodedText) {
       const now = Date.now();
       if (busy || now - lastResultAt < 2000) return;
-      // 閨ｷ蜩｡縺悟ｯｾ雎｡閠・ｒ驕ｸ繧薙〒縺・ｋ譛荳ｭ縺ｯ縲∵遠蛻ｻ縺帙★縺ｫ縺昴・莠ｺ縺ｮ險倬鹸繧帝幕縺・
+      // 職員が対象者を選んでいる最中は、打刻せずにその人の記録を開く
       if (staffPickMode && document.getElementById("pickBox").style.display === "block") {
         lastResultAt = now;
         pickTarget(decodedText.trim());
@@ -285,10 +285,10 @@
       if (document.getElementById("confirmScreen").style.display === "flex") return;
       busy = true;
       lastResultAt = now;
-      // 蠢懃ｭ斐∪縺ｧ謨ｰ遘偵°縺九ｋ縲ょｾ・▲縺ｦ縺・ｋ髢薙ｂ菴輔°蜃ｺ縺励※縺翫°縺ｪ縺・→縲∬ｪｭ繧√※縺・↑縺・→諤昴ｏ繧後ｋ縲・
+      // 応答まで数秒かかる。待っている間も何か出しておかないと、読めていないと思われる。
       const el = document.getElementById("message");
       el.className = "";
-      el.textContent = "繧医∩縺ｨ繧翫∪縺励◆縲縺励・繧峨￥ 縺翫∪縺｡縺上□縺輔＞窶ｦ";
+      el.textContent = "よみとりました　しばらく おまちください…";
       callApi({ uid: decodedText.trim() }, onScanResult, onScanError);
     }
 
@@ -296,32 +296,32 @@
       const el = document.getElementById("message");
       if (res.status === "ok") {
         el.className = "ok";
-        // 譚･謇縺矩謇縺九ｒ蠢・★蜃ｺ縺吶よ擂謇縺縺ｨ遒ｺ隱咲判髱｢縺ｯ蜃ｺ縺ｪ縺・・縺ｧ縲√←縺｡繧峨〒謇灘綾縺輔ｌ縺溘°蛻・°繧峨↑縺・→蝗ｰ繧九・
-        el.textContent = res.kubun === "譚･謇"
-          ? `${res.name}縺輔ｓ 縺翫・繧医≧縺斐＊縺・∪縺呻ｼ・{res.time} 譚･謇・荏
-          : `${res.name}縺輔ｓ 縺翫▽縺九ｌ縺輔∪縺ｧ縺励◆・・{res.time} 騾謇・荏;
-        // 騾蜍､縺ｮ縺ｨ縺阪・蠖捺律繧ｵ繝槭Μ繝ｼ繧貞・縺励※譛ｬ莠ｺ遒ｺ隱阪∈
-        if (res.kubun === "騾謇") {
+        // 来所か退所かを必ず出す。来所だと確認画面は出ないので、どちらで打刻されたか分からないと困る。
+        el.textContent = res.kubun === "来所"
+          ? `${res.name}さん おはようございます（${res.time} 来所）`
+          : `${res.name}さん おつかれさまでした（${res.time} 退所）`;
+        // 退勤のときは当日サマリーを出して本人確認へ
+        if (res.kubun === "退所") {
           if (res.summary && res.summary.status === "ok") {
             setTimeout(() => showConfirm(res.summary), 300);
             return;
           }
-          // 遒ｺ隱咲判髱｢繧貞・縺帙↑縺・凾縺ｯ逅・罰繧貞・縺吶るｻ吶▲縺ｦ蜃ｺ縺ｪ縺・→蜴溷屏縺悟・縺九ｉ縺ｪ縺上↑繧九◆繧√・
+          // 確認画面を出せない時は理由を出す。黙って出ないと原因が分からなくなるため。
           el.className = "invalid";
-          el.textContent = `${res.name}縺輔ｓ ${res.time} 謇灘綾縺励∪縺励◆縲窶ｻ` +
-            ((res.summary && res.summary.message) || "縺阪ｇ縺・・ 縺阪ｍ縺上′ 繧医∩縺ｨ繧後∪縺帙ｓ") +
-            "・医＠繧・￥縺・ｓ繧・繧医ｓ縺ｧ縺上□縺輔＞・・;
+          el.textContent = `${res.name}さん ${res.time} 打刻しました　※` +
+            ((res.summary && res.summary.message) || "きょうの きろくが よみとれません") +
+            "（しょくいんを よんでください）";
         }
       } else if (res.status === "duplicate") {
         el.className = "duplicate";
-        el.textContent = `${res.name}縺輔ｓ縲・{res.message}`;
+        el.textContent = `${res.name}さん、${res.message}`;
       } else {
         el.className = "invalid";
         el.textContent = res.message;
       }
       setTimeout(() => {
         el.className = "";
-        el.textContent = "QR繧ｫ繝ｼ繝峨ｒ縺九＊縺励※縺上□縺輔＞";
+        el.textContent = "QRカードをかざしてください";
         busy = false;
       }, 3000);
     }
@@ -329,36 +329,36 @@
     function showConfirm(s) {
       try {
         confirmUid = s.uid;
-        document.getElementById("confirmName").textContent = s.name + "縺輔ｓ 縺翫▽縺九ｌ縺輔∪縺ｧ縺励◆";
-        // 蟾･雉・・譬ｹ諡縺ｫ縺ｪ繧九・縺ｯ莠亥ｮ壽凾蛻ｻ・郁・蜩｡縺御ｿｮ豁｣縺励◆蛟､・峨よ遠蛻ｻ譎ょ綾縺ｧ縺ｯ縺ｪ縺・・
-        document.getElementById("cTime").textContent = (s.planIn || "") + " 縲・" + (s.planOut || "");
+        document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
+        // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
+        document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
         buildDetail(s);
-        document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 蜀・;
+        document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
         document.getElementById("staffCall").style.display = "none";
         document.getElementById("staffEnter").style.display = "none";
         document.getElementById("confirmBtns").style.display = "flex";
         document.getElementById("confirmScreen").style.display = "flex";
       } catch (e) {
-        // 逕ｻ髱｢繧剃ｽ懊ｋ騾比ｸｭ縺ｧ螟ｱ謨励☆繧九→縲∵遠蛻ｻ縺縺第ｸ医ｓ縺ｧ菴輔ｂ蜃ｺ縺ｪ縺・憾諷九↓縺ｪ繧九ら炊逕ｱ繧貞・縺吶・
+        // 画面を作る途中で失敗すると、打刻だけ済んで何も出ない状態になる。理由を出す。
         const el = document.getElementById("message");
         el.className = "invalid";
-        el.textContent = "縺九￥縺ｫ繧・縺後ａ繧薙ｒ 縺ｲ繧峨￠縺ｾ縺帙ｓ・医＠繧・￥縺・ｓ繧・繧医ｓ縺ｧ縺上□縺輔＞・・ " + e.message;
+        el.textContent = "かくにん がめんを ひらけません（しょくいんを よんでください）: " + e.message;
         busy = false;
       }
     }
 
 
-    // 縲御ｽ墓凾縺九ｉ菴墓凾縺ｾ縺ｧ・上←縺ｮ菴懈･ｭ・丞ｷ･雉・阪ｒ譎る俣縺ｮ鬆・↓荳ｦ縺ｹ繧九ょ粋險医□縺題ｦ九○縺ｦ遒ｺ隱阪＆縺帙↑縺・◆繧√・
+    // 「何時から何時まで／どの作業／工賃」を時間の順に並べる。合計だけ見せて確認させないため。
     function buildDetail(s) {
       const box = document.getElementById("cDetail");
       box.innerHTML = "";
       const list = s.timeline || [];
       if (!list.length) {
-        // 蜿､縺ЖAS縺ｮ縺ｾ縺ｾ・・imeline 縺檎┌縺・ｼ峨↑繧峨∽ｽ懈･ｭ縺斐→縺ｮ蜀・ｨｳ縺ｧ蜃ｺ縺・
+        // 古いGASのまま（timeline が無い）なら、作業ごとの内訳で出す
         if ((s.breakdown || []).length) return buildDetailByTask(s, box);
         const p = document.createElement("div");
         p.className = "dTask";
-        p.textContent = "・医＆縺弱ｇ縺・′ 縺ｾ縺 縺ｯ縺・▲縺ｦ縺・∪縺帙ｓ・・;
+        p.textContent = "（さぎょうが まだ はいっていません）";
         box.appendChild(p);
         return;
       }
@@ -366,15 +366,15 @@
         const row = document.createElement("div");
         row.className = "dRow";
 
-        // 譎ょ綾縺ｨ蜊倅ｾ｡縺ｯ1陦後↓縺ｾ縺ｨ繧√ｋ縲り｡後′3谿ｵ縺ｫ縺ｪ繧九→逕ｻ髱｢縺九ｉ縺ｯ縺ｿ蜃ｺ縺吶◆繧√・
+        // 時刻と単価は1行にまとめる。行が3段になると画面からはみ出すため。
         const head = document.createElement("div");
         head.className = "dHead";
         const time = document.createElement("div");
         time.className = "dTime";
-        time.textContent = w.from + " 縲・" + w.to;
+        time.textContent = w.from + " 〜 " + w.to;
         const r = document.createElement("div");
         r.className = "dRate";
-        r.textContent = Number(w.rate).toLocaleString() + "蜀・ｼ上§縺九ｓ";
+        r.textContent = Number(w.rate).toLocaleString() + "円／じかん";
         head.appendChild(time); head.appendChild(r);
 
         const line = document.createElement("div");
@@ -384,7 +384,7 @@
         t.textContent = w.task;
         const a = document.createElement("div");
         a.className = "dAmount";
-        a.textContent = Number(w.amount).toLocaleString() + "蜀・;
+        a.textContent = Number(w.amount).toLocaleString() + "円";
         line.appendChild(t); line.appendChild(a);
 
         row.appendChild(head); row.appendChild(line);
@@ -392,7 +392,7 @@
       });
     }
 
-    // 譌ｧ陦ｨ遉ｺ・井ｽ懈･ｭ縺斐→縺ｫ縲悟腰萓｡ ﾃ・譎る俣 = 蟆剰ｨ医搾ｼ峨・AS繧貞ｷｮ縺玲崛縺医ｋ縺ｾ縺ｧ縺ｮ菫晞匱縲・
+    // 旧表示（作業ごとに「単価 × 時間 = 小計」）。GASを差し替えるまでの保険。
     function buildDetailByTask(s, box) {
       s.breakdown.forEach(function (w) {
         const row = document.createElement("div");
@@ -402,25 +402,25 @@
         t.textContent = w.task;
         const c = document.createElement("div");
         c.className = "dCalc";
-        c.innerHTML = Number(w.rate).toLocaleString() + "蜀・ﾃ・" + hhmm(w.minutes) +
-                      " = <span class=\"dAmount\">" + Number(w.amount).toLocaleString() + "蜀・/span>";
+        c.innerHTML = Number(w.rate).toLocaleString() + "円 × " + hhmm(w.minutes) +
+                      " = <span class=\"dAmount\">" + Number(w.amount).toLocaleString() + "円</span>";
         row.appendChild(t); row.appendChild(c);
         box.appendChild(row);
       });
     }
 
-    // 95蛻・竊・縲・縺倥°繧・5縺ｵ繧薙・
+    // 95分 → 「1じかん35ふん」
     function hhmm(min) {
       const h = Math.floor(min / 60), m = min % 60;
-      if (h && m) return h + "縺倥°繧・ + m + "縺ｵ繧・;
-      if (h) return h + "縺倥°繧・;
-      return m + "縺ｵ繧・;
+      if (h && m) return h + "じかん" + m + "ふん";
+      if (h) return h + "じかん";
+      return m + "ふん";
     }
 
     function hideConfirm() {
       document.getElementById("confirmScreen").style.display = "none";
       document.getElementById("message").className = "";
-      document.getElementById("message").textContent = "QR繧ｫ繝ｼ繝峨ｒ縺九＊縺励※縺上□縺輔＞";
+      document.getElementById("message").textContent = "QRカードをかざしてください";
       confirmUid = null;
       busy = false;
     }
@@ -428,13 +428,13 @@
     function onConfirm() {
       if (!confirmUid) return hideConfirm();
       document.getElementById("confirmBtns").style.display = "none";
-      // 騾壻ｿ｡縺ｫ謨ｰ遘偵°縺九ｋ縲よ款縺励◆謇句ｿ懊∴縺檎┌縺・→菴募ｺｦ繧よ款縺輔ｌ縺ｦ縺励∪縺・・
-      document.getElementById("confirmName").textContent = "縺阪ｍ縺・縺励※縺・∪縺吮ｦ";
+      // 通信に数秒かかる。押した手応えが無いと何度も押されてしまう。
+      document.getElementById("confirmName").textContent = "きろく しています…";
       callApi({ uid: confirmUid, action: "confirm" }, () => {
-        document.getElementById("confirmName").textContent = "縺阪ｍ縺上＠縺ｾ縺励◆ 縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺励◆ 笨・;
+        document.getElementById("confirmName").textContent = "きろくしました ありがとうございました ✓";
         setTimeout(hideConfirm, 2000);
       }, () => {
-        document.getElementById("staffCall").textContent = "縺､縺・＠繧薙お繝ｩ繝ｼ 縺励ｇ縺上＞繧薙ｒ 繧医ｓ縺ｧ縺上□縺輔＞";
+        document.getElementById("staffCall").textContent = "つうしんエラー しょくいんを よんでください";
         document.getElementById("staffCall").style.display = "block";
         setTimeout(hideConfirm, 6000);
       });
@@ -446,18 +446,18 @@
       document.getElementById("staffEnter").style.display = "block";
     }
 
-    // ---- 閨ｷ蜩｡繝｢繝ｼ繝・----
+    // ---- 職員モード ----
     let staffName = null;
     let staffSummary = null;
     let taskList = [];
 
-    // 騾蜍､譎ゅ・遒ｺ隱咲判髱｢縺九ｉ蜈･繧具ｼ亥ｯｾ雎｡閠・・遒ｺ螳壽ｸ医∩・・
+    // 退勤時の確認画面から入る（対象者は確定済み）
     function openStaff() {
       staffPickMode = false;
       showStaffScreen();
     }
 
-    // 繝｡繧､繝ｳ逕ｻ髱｢縺九ｉ蜈･繧具ｼ域律荳ｭ縺ｮ菫ｮ豁｣縲ょｯｾ雎｡閠・ｒ縺薙ｌ縺九ｉ驕ｸ縺ｶ・・
+    // メイン画面から入る（日中の修正。対象者をこれから選ぶ）
     function openStaffPick() {
       staffPickMode = true;
       confirmUid = null;
@@ -471,7 +471,7 @@
       document.getElementById("editBox").style.display = "none";
       document.getElementById("menuBox").style.display = "none";
       document.getElementById("listBox").style.display = "none";
-      document.getElementById("staffTitle").textContent = "閨ｷ蜩｡繝｢繝ｼ繝・;
+      document.getElementById("staffTitle").textContent = "職員モード";
       document.getElementById("staffMsg").textContent = "";
       document.getElementById("staffWho").textContent = "";
       document.getElementById("pinInput").value = "";
@@ -480,7 +480,7 @@
     }
 
 
-    // ---- 閨ｷ蜩｡繝｡繝九Η繝ｼ ----
+    // ---- 職員メニュー ----
     function backToMenu() {
       document.getElementById("listBox").style.display = "none";
       document.getElementById("pickBox").style.display = "none";
@@ -495,28 +495,28 @@
       document.getElementById("pickBox").style.display = "block";
     }
 
-    // ---- 譛ｬ譌･縺ｮ蜃ｺ蟶ｭ荳隕ｧ ----
+    // ---- 本日の出席一覧 ----
     let dayList = [];
 
     function openAttendList() {
       document.getElementById("menuBox").style.display = "none";
       document.getElementById("staffMsg").style.color = "#555";
-      document.getElementById("staffMsg").textContent = "隱ｭ縺ｿ霎ｼ縺ｿ荳ｭ...";
+      document.getElementById("staffMsg").textContent = "読み込み中...";
       callApi({ action: "dayList" }, (res) => {
         if (res.status !== "ok") {
           document.getElementById("staffMsg").style.color = "#B71C1C";
-          document.getElementById("staffMsg").textContent = res.message || "隱ｭ縺ｿ霎ｼ繧√∪縺帙ｓ縺ｧ縺励◆";
+          document.getElementById("staffMsg").textContent = res.message || "読み込めませんでした";
           document.getElementById("menuBox").style.display = "block";
           return;
         }
         dayList = res.list || [];
         document.getElementById("staffMsg").textContent = "";
-        document.getElementById("listLabel").textContent = res.date + " 縺ｮ蜃ｺ蟶ｭ・・ + dayList.length + "蜷搾ｼ・;
+        document.getElementById("listLabel").textContent = res.date + " の出席（" + dayList.length + "名）";
         buildAttendList();
         document.getElementById("listBox").style.display = "block";
       }, () => {
         document.getElementById("staffMsg").style.color = "#B71C1C";
-        document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ";
+        document.getElementById("staffMsg").textContent = "通信エラー";
         document.getElementById("menuBox").style.display = "block";
       });
     }
@@ -540,12 +540,12 @@
         nm.textContent = p.name;
         const info = document.createElement("div");
         info.className = "aInfo";
-        info.textContent = p.planIn + "縲・ + p.planOut + "縲譏ｼ鬟・" + (p.lunch || "縺ｪ縺・);
+        info.textContent = p.planIn + "〜" + p.planOut + "　昼食:" + (p.lunch || "なし");
         const st = document.createElement("div");
-        // QR縺ｧ謇灘綾貂医∩縺九←縺・°縺悟・縺九ｋ繧医≧縺ｫ縺吶ｋ
-        if (p.punchedOut) { st.className = "aPunch"; st.textContent = "笨・騾蜍､縺壹∩"; }
-        else if (p.punchedIn) { st.className = "aPunch"; st.textContent = "笨・蜃ｺ蜍､縺壹∩"; }
-        else { st.className = "aNone"; st.textContent = "謇灘綾縺ｪ縺・; }
+        // QRで打刻済みかどうかが分かるようにする
+        if (p.punchedOut) { st.className = "aPunch"; st.textContent = "✓ 退勤ずみ"; }
+        else if (p.punchedIn) { st.className = "aPunch"; st.textContent = "✓ 出勤ずみ"; }
+        else { st.className = "aNone"; st.textContent = "打刻なし"; }
         wrap.appendChild(nm); wrap.appendChild(info); wrap.appendChild(st);
 
         row.appendChild(cb); row.appendChild(wrap);
@@ -560,43 +560,43 @@
         if (cb && cb.checked) ids.push(p.uid);
       });
       document.getElementById("staffMsg").style.color = "#555";
-      document.getElementById("staffMsg").textContent = "逋ｻ骭ｲ荳ｭ...";
+      document.getElementById("staffMsg").textContent = "登録中...";
       callApi(withPin({ action: "setAttendance", uids: ids.join(",") }), (res) => {
         const msg = document.getElementById("staffMsg");
         if (res.status === "ok") {
           msg.style.color = "#1B5E20";
-          msg.textContent = "逋ｻ骭ｲ縺励∪縺励◆・・ + res.changed + "蜷阪ｒ螟画峩・・;
+          msg.textContent = "登録しました（" + res.changed + "名を変更）";
           openAttendList();
         } else {
           msg.style.color = "#B71C1C";
-          msg.textContent = res.message || "逋ｻ骭ｲ縺ｧ縺阪∪縺帙ｓ縺ｧ縺励◆";
+          msg.textContent = res.message || "登録できませんでした";
         }
       }, () => {
         document.getElementById("staffMsg").style.color = "#B71C1C";
-        document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ";
+        document.getElementById("staffMsg").textContent = "通信エラー";
       });
     }
 
-    // 蟇ｾ雎｡閠・ｒ驕ｸ縺ｶ・・R繧偵°縺悶☆・終D繧貞・蜉幢ｼ・
+    // 対象者を選ぶ（QRをかざす／IDを入力）
     function pickTarget(uid) {
       const id = (uid || document.getElementById("pickId").value || "").trim();
       if (!id) return;
       confirmUid = id;
       document.getElementById("pickBox").style.display = "none";
-      document.getElementById("staffMsg").textContent = "隱ｭ縺ｿ霎ｼ縺ｿ荳ｭ...";
+      document.getElementById("staffMsg").textContent = "読み込み中...";
       loadEditor();
     }
 
     function closeStaff() {
       document.getElementById("staffScreen").style.display = "none";
       staffName = null;
-      if (staffPickMode) {      // 譌･荳ｭ縺ｮ菫ｮ豁｣縲よ悽莠ｺ遒ｺ隱阪・騾蜍､譎ゅ↓陦後≧
+      if (staffPickMode) {      // 日中の修正。本人確認は退勤時に行う
         staffPickMode = false;
         confirmUid = null;
         hideConfirm();
         return;
       }
-      // 騾蜍､譎ゅ・菫ｮ豁｣縲ら峩縺励◆蜀・ｮｹ縺ｧ譛ｬ莠ｺ縺ｮ遒ｺ隱咲判髱｢縺ｫ謌ｻ縺・
+      // 退勤時の修正。直した内容で本人の確認画面に戻す
       if (confirmUid) {
         callApi({ uid: confirmUid, action: "summary" }, (s) => {
           if (s.status === "ok") showConfirm(s); else hideConfirm();
@@ -609,22 +609,22 @@
     function doStaffAuth() {
       const pin = document.getElementById("pinInput").value.trim();
       if (!pin) return;
-      document.getElementById("staffMsg").textContent = "遒ｺ隱堺ｸｭ...";
+      document.getElementById("staffMsg").textContent = "確認中...";
       callApi({ action: "staffAuth", pin: pin }, (res) => {
         if (res.status !== "ok") {
-          document.getElementById("staffMsg").textContent = res.message || "證苓ｨｼ逡ｪ蜿ｷ縺碁＆縺・∪縺・;
+          document.getElementById("staffMsg").textContent = res.message || "暗証番号が違います";
           return;
         }
         staffName = res.staff;
         document.getElementById("staffMsg").textContent = "";
-        document.getElementById("staffWho").textContent = staffName + " 縺輔ｓ縺ｨ縺励※菫ｮ豁｣縺励∪縺・;
+        document.getElementById("staffWho").textContent = staffName + " さんとして修正します";
         document.getElementById("pinBox").style.display = "none";
         if (staffPickMode && !confirmUid) {
           document.getElementById("menuBox").style.display = "block";
           return;
         }
         loadEditor();
-      }, () => { document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ"; });
+      }, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
     function loadEditor() {
@@ -638,8 +638,8 @@
         });
         callApi({ uid: confirmUid, action: "summary" }, (s) => {
           if (s.status !== "ok") {
-            // ID縺ｮ謇薙■髢馴＆縺・ｄ縲∵悽譌･縺ｮ莠亥ｮ壹′辟｡縺・ｴ蜷・
-            document.getElementById("staffMsg").textContent = s.message || "縺薙・譁ｹ縺ｮ譛ｬ譌･縺ｮ險倬鹸縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ";
+            // IDの打ち間違いや、本日の予定が無い場合
+            document.getElementById("staffMsg").textContent = s.message || "この方の本日の記録が見つかりません";
             document.getElementById("editBox").style.display = "none";
             if (staffPickMode) {
               confirmUid = null;
@@ -648,17 +648,17 @@
             return;
           }
           staffSummary = s;
-          document.getElementById("staffTitle").textContent = s.name + " 縺輔ｓ縺ｮ險倬鹸繧剃ｿｮ豁｣";
-          // 邱ｨ髮・ｯｾ雎｡縺ｯ莠亥ｮ壽凾蛻ｻ縲ょｮ滄圀縺ｮ謇灘綾譎ょ綾縺ｯ蜿り・→縺励※荳九↓陦ｨ遉ｺ縺吶ｋ縲・
+          document.getElementById("staffTitle").textContent = s.name + " さんの記録を修正";
+          // 編集対象は予定時刻。実際の打刻時刻は参考として下に表示する。
           document.getElementById("editIn").value = s.planIn || "";
           document.getElementById("editOut").value = s.planOut || "";
           document.getElementById("punchNote").textContent =
-            "螳滄圀縺ｮ謇灘綾・・蜃ｺ蜍､ " + (s.actualIn || "縺ｪ縺・) + " ・・騾蜍､ " + (s.actualOut || "縺ｪ縺・);
-          lunchSel.value = s.lunch || "縺ｪ縺・;
+            "実際の打刻： 出勤 " + (s.actualIn || "なし") + " ／ 退勤 " + (s.actualOut || "なし");
+          lunchSel.value = s.lunch || "なし";
           buildSlotList(s);
           document.getElementById("editBox").style.display = "block";
-        }, () => { document.getElementById("staffMsg").textContent = "隱ｭ縺ｿ霎ｼ縺ｿ繧ｨ繝ｩ繝ｼ"; });
-      }, () => { document.getElementById("staffMsg").textContent = "隱ｭ縺ｿ霎ｼ縺ｿ繧ｨ繝ｩ繝ｼ"; });
+        }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
+      }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
     }
 
     function buildSlotList(s) {
@@ -666,20 +666,20 @@
       box.innerHTML = "";
       (s.slots || []).forEach((label, i) => {
         const info = (s.slotRanges && s.slotRanges[i]) || {};
-        if (!info.available) return;   // 騾壽園譎る俣螟悶・譫縺ｯ蜃ｺ縺輔↑縺・
+        if (!info.available) return;   // 通所時間外の枠は出さない
 
         const wrap = document.createElement("div");
         wrap.className = info.warn ? "slotBox slotWarn" : "slotBox";
 
         const head = document.createElement("div");
         head.className = "slotHead";
-        head.textContent = info.warn ? "笞 " + label + "・井ｽ懈･ｭ縺梧悴驕ｸ謚橸ｼ・ : label;
+        head.textContent = info.warn ? "⚠ " + label + "（作業が未選択）" : label;
         wrap.appendChild(head);
 
-        // 菴懈･ｭ蜀・ｮｹ
+        // 作業内容
         const sel = document.createElement("select");
         const blank = document.createElement("option");
-        blank.value = ""; blank.textContent = "・井ｽ懈･ｭ縺ｪ縺暦ｼ・;
+        blank.value = ""; blank.textContent = "（作業なし）";
         sel.appendChild(blank);
         taskList.forEach(name => {
           const op = document.createElement("option");
@@ -690,34 +690,34 @@
         sel.onchange = () => saveWork(i, sel.value, "1");
         wrap.appendChild(sel);
 
-        // 螳滄圀縺ｫ菴懈･ｭ縺励◆譎る俣・磯比ｸｭ縺ｧ謚懊￠縺溷ｴ蜷医□縺大・蜉幢ｼ・
+        // 実際に作業した時間（途中で抜けた場合だけ入力）
         const line = document.createElement("div");
         line.className = "slotRow";
         const lab = document.createElement("span");
-        lab.textContent = "螳滄圀縺ｮ譎る俣";
+        lab.textContent = "実際の時間";
         const inp = document.createElement("input");
         inp.type = "text";
         inp.placeholder = info.defaultRange || "";
         inp.value = info.real || "";
         const btn = document.createElement("button");
         btn.className = "btn";
-        btn.textContent = "菫晏ｭ・;
+        btn.textContent = "保存";
         btn.onclick = () => saveSlotTime(i, inp.value.trim());
         const clr = document.createElement("button");
         clr.className = "btn btnGray";
-        clr.textContent = "謌ｻ縺・;
+        clr.textContent = "戻す";
         clr.onclick = () => { inp.value = ""; saveSlotTime(i, ""); };
         line.appendChild(lab); line.appendChild(inp); line.appendChild(btn); line.appendChild(clr);
         wrap.appendChild(line);
 
-        // 2縺､逶ｮ縺ｮ菴懈･ｭ・井ｽ懈･ｭ竭縺ｫ螳滓凾髢薙ｒ蜈･繧後ｋ縺ｨ縲√◎縺ｮ譫縺ｮ谿九ｊ譎る俣繧呈球蠖薙☆繧具ｼ・
+        // 2つ目の作業（作業①に実時間を入れると、その枠の残り時間を担当する）
         if (info.rest) {
           const lab2 = document.createElement("div");
           lab2.className = "restLabel";
-          lab2.textContent = "谿九ｊ " + info.rest + " 縺ｮ菴懈･ｭ";
+          lab2.textContent = "残り " + info.rest + " の作業";
           const sel2 = document.createElement("select");
           const b2 = document.createElement("option");
-          b2.value = ""; b2.textContent = "・井ｽ懈･ｭ縺ｪ縺暦ｼ・;
+          b2.value = ""; b2.textContent = "（作業なし）";
           sel2.appendChild(b2);
           taskList.forEach(name => {
             const op = document.createElement("option");
@@ -737,7 +737,7 @@
     function saveSlotTime(slotIndex, range) {
       callApi(withPin({ uid: confirmUid, action: "updateSlotTime", slot: slotIndex, range: range }),
         (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
-        () => { document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ"; });
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
     function withPin(params) {
@@ -749,10 +749,10 @@
       const msg = document.getElementById("staffMsg");
       if (res.status === "ok") {
         staffSummary = res;
-        let text = "菫晏ｭ倥＠縺ｾ縺励◆・・ + res.minutes + "蛻・/ " + Number(res.wage || 0).toLocaleString() + "蜀・ｼ・;
-        // 譎る俣縺縺大・繧後※菴懈･ｭ繧帝∈縺ｳ蠢倥ｌ繧九→0蛻・↓縺ｪ縺｣縺ｦ縺励∪縺・◆繧√∵ｰ励▼縺代ｋ繧医≧縺ｫ縺吶ｋ
+        let text = "保存しました（" + res.minutes + "分 / " + Number(res.wage || 0).toLocaleString() + "円）";
+        // 時間だけ入れて作業を選び忘れると0分になってしまうため、気づけるようにする
         if (res.warnSlots && res.warnSlots.length) {
-          text += "縲笞 " + res.warnSlots.join("縲・) + " 縺ｯ譎る俣縺悟・縺｣縺ｦ縺・∪縺吶′菴懈･ｭ縺梧悴驕ｸ謚槭〒縺呻ｼ・蛻・↓縺ｪ繧翫∪縺呻ｼ・;
+          text += "　⚠ " + res.warnSlots.join("、") + " は時間が入っていますが作業が未選択です（0分になります）";
           msg.style.color = "#B71C1C";
         } else {
           msg.style.color = "#1B5E20";
@@ -760,7 +760,7 @@
         msg.textContent = text;
       } else {
         msg.style.color = "#B71C1C";
-        msg.textContent = res.message || "菫晏ｭ倥〒縺阪∪縺帙ｓ縺ｧ縺励◆";
+        msg.textContent = res.message || "保存できませんでした";
       }
     }
 
@@ -768,26 +768,26 @@
       const v = document.getElementById(which === "in" ? "editIn" : "editOut").value;
       if (!v) return;
       callApi(withPin({ uid: confirmUid, action: "updateTime", which: which, time: v }), afterSave,
-        () => { document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ"; });
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
     function saveLunch() {
       callApi(withPin({ uid: confirmUid, action: "updateLunch", lunch: document.getElementById("editLunch").value }),
-        afterSave, () => { document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ"; });
+        afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
     function saveWork(slotIndex, task, which) {
       callApi(withPin({ uid: confirmUid, action: "updateWork", slot: slotIndex, task: task, which: which || "1" }),
         (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
-        () => { document.getElementById("staffMsg").textContent = "騾壻ｿ｡繧ｨ繝ｩ繝ｼ"; });
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
     function onScanError() {
-      // 謇灘綾縺ｯ繧ｵ繝ｼ繝舌・蛛ｴ縺ｧ蜈医↓貂医ｓ縺ｧ縺・ｋ縺薙→縺後≠繧九ゅ☆縺占ｪｭ縺ｿ逶ｴ縺吶→縲碁｣邯夊ｪｭ縺ｿ蜿悶ｊ縲阪〒蠑ｾ縺九ｌ繧九◆繧√・
-      // 縲後ｂ縺・ｸ蠎ｦ縲阪〒縺ｯ縺ｪ縺剰・蜩｡縺ｫ遏･繧峨○繧区｡亥・縺ｫ縺吶ｋ縲・
+      // 打刻はサーバー側で先に済んでいることがある。すぐ読み直すと「連続読み取り」で弾かれるため、
+      // 「もう一度」ではなく職員に知らせる案内にする。
       const el = document.getElementById("message");
       el.className = "invalid";
-      el.textContent = "縺､縺・＠繧薙お繝ｩ繝ｼ縲ゅ≧縺｡縺薙￥縺ｯ 縺阪ｍ縺上＆繧後※ 縺・ｋ縺九ｂ 縺励ｌ縺ｾ縺帙ｓ・医＠繧・￥縺・ｓ繧・繧医ｓ縺ｧ縺上□縺輔＞・・;
+      el.textContent = "つうしんエラー。うちこくは きろくされて いるかも しれません（しょくいんを よんでください）";
       busy = false;
     }
 
@@ -809,12 +809,12 @@
     Html5Qrcode.getCameras().then((cameras) => {
       const cameraId = cameras.length > 0 ? cameras[cameras.length - 1].id : null;
       if (!cameraId) {
-        document.getElementById("message").textContent = "繧ｫ繝｡繝ｩ縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲よ焔蜈･蜉帙ｒ縺泌茜逕ｨ縺上□縺輔＞";
+        document.getElementById("message").textContent = "カメラが見つかりません。手入力をご利用ください";
         return;
       }
       html5QrCode.start(cameraId, { fps: 10, qrbox: 250 }, onScanSuccess);
     }).catch(() => {
-      document.getElementById("message").textContent = "繧ｫ繝｡繝ｩ縺ｮ襍ｷ蜍輔↓螟ｱ謨励＠縺ｾ縺励◆縲よ焔蜈･蜉帙ｒ縺泌茜逕ｨ縺上□縺輔＞";
+      document.getElementById("message").textContent = "カメラの起動に失敗しました。手入力をご利用ください";
     });
   </script>
 </body>
