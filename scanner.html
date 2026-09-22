@@ -33,9 +33,12 @@
     #appVer { font-size: 2.6vw; color: #999; margin-top: 6px; text-align: center; }
 
     /* 退勤時の本人確認画面 */
+    /* 文字の大きさは vw（画面の横幅）で決めているが、横に広く縦が短い画面
+       （1024×600のような横向きタブレット）だと文字だけ大きくなって縦に入らなくなる。
+       min() で頭打ちにしてある。上限は幅768pxのときの値なので、iPadの見た目は変わらない。 */
     #confirmScreen {
       display: none; position: fixed; inset: 0; background: #fff; z-index: 10;
-      flex-direction: column; align-items: center; padding: 4vw;
+      flex-direction: column; align-items: center; padding: min(4vw, 31px);
       box-sizing: border-box; text-align: center;
       /* 作業が多い日は中身が画面より高くなる。上から並べてスクロールできるようにしないと
          「かくにん」ボタンが画面の外に出てしまう。 */
@@ -44,38 +47,52 @@
     /* 上（名前・時間）／中（しごとの内訳＝あふれたらここだけスクロール）／下（こうちん・ボタン）。
        こうしないと作業が多い日に合計とボタンが画面の外へ出てしまう。 */
     #confirmName {
-      flex: 0 0 auto; font-size: 5.5vw; font-weight: bold; color: #1B5E20; margin-bottom: 2vw;
+      flex: 0 0 auto; font-size: min(5.5vw, 42px); font-weight: bold; color: #1B5E20;
+      margin-bottom: min(2vw, 15px); line-height: 1.25;
     }
-    /* じかんは1行にまとめる。しごとの内訳に高さを回すため。 */
-    #cTimeRow { display: flex; align-items: baseline; justify-content: space-between; gap: 3vw; }
-    #cTimeRow .cLabel { margin-bottom: 0; }
-    #cTimeRow .cValue { font-size: 5.5vw; }
+    /* じかんは枠を持たせず名前の下に置く。そのぶんの高さをしごとの内訳に回すため。 */
+    #cSub {
+      flex: 0 0 auto; font-size: min(4.2vw, 32px); color: #555;
+      margin-bottom: min(2vw, 15px); line-height: 1.3;
+    }
+    #cSub #cTime { font-size: min(5vw, 38px); font-weight: bold; color: #222; }
     .cRow {
       flex: 0 0 auto;
       width: 92vw; max-width: 600px; background: #F1F8E9; border-radius: 12px;
-      padding: 2.5vw 4vw; margin-bottom: 2vw; text-align: left;
+      padding: min(2.2vw, 17px) min(4vw, 31px); margin-bottom: min(2vw, 15px); text-align: left;
     }
     #cWorkRow {
-      flex: 1 1 auto; min-height: 20vh; display: flex; flex-direction: column;
+      /* min-height を付けると、画面が低いときに合計とボタンを押し出してしまう。
+         残った高さをそのまま使い、入りきらないぶんは中でスクロールさせる。 */
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
       overflow: hidden; box-sizing: border-box;
     }
-    .cLabel { font-size: 4vw; color: #555; margin-bottom: 1.5vw; }
-    .cValue { font-size: 7vw; font-weight: bold; color: #222; }
+    .cLabel { font-size: min(4vw, 31px); color: #555; margin-bottom: min(0.8vw, 6px); line-height: 1.2; }
+    .cValue { font-size: min(7vw, 54px); font-weight: bold; color: #222; line-height: 1.2; }
     /* 作業が多い日は、この欄だけがスクロールする */
     #cDetail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-    .dRow { border-top: 1px solid #C5E1A5; padding: 1.5vw 0; }
+    /* 枠に入りきらない作業があることを知らせる。出ていないと、見えていない作業のまま確認されてしまう。 */
+    #cMore {
+      display: none; flex: 0 0 auto; font-size: min(3.8vw, 29px); font-weight: bold; color: #B71C1C;
+      text-align: center; padding-top: min(1vw, 8px); margin-top: min(1vw, 8px);
+      border-top: 1px dashed #C5E1A5; line-height: 1.3;
+    }
+    .dRow { border-top: 1px solid #C5E1A5; padding: min(1.2vw, 9px) 0; }
     .dRow:first-child { border-top: none; }
-    .dHead { display: flex; align-items: baseline; gap: 2vw; }
-    .dTime { font-size: 5vw; font-weight: bold; color: #1B5E20; }
-    .dLine { display: flex; justify-content: space-between; align-items: baseline; gap: 2vw; }
-    .dTask { font-size: 4.6vw; font-weight: bold; color: #222; }
-    .dCalc { font-size: 4.5vw; color: #444; margin-top: 0.5vw; }
-    .dRate { font-size: 3.6vw; color: #666; white-space: nowrap; }
-    .dAmount { font-size: 5vw; font-weight: bold; color: #1B5E20; white-space: nowrap; }
+    .dHead { display: flex; align-items: baseline; gap: min(2vw, 15px); }
+    .dTime { font-size: min(5vw, 38px); font-weight: bold; color: #1B5E20; line-height: 1.25; }
+    .dLine { display: flex; justify-content: space-between; align-items: baseline; gap: min(2vw, 15px); }
+    .dTask { font-size: min(4.6vw, 35px); font-weight: bold; color: #222; line-height: 1.25; }
+    .dCalc { font-size: min(4.5vw, 35px); color: #444; margin-top: 0.5vw; }
+    .dRate { font-size: min(3.6vw, 28px); color: #666; white-space: nowrap; }
+    .dAmount { font-size: min(5vw, 38px); font-weight: bold; color: #1B5E20; white-space: nowrap; line-height: 1.25; }
     #cTotalRow { background: #E8F5E9; border: 2px solid #2E7D32; }
-    #confirmBtns { flex: 0 0 auto; display: flex; gap: 4vw; margin-top: 1vw; justify-content: center; }
+    #confirmBtns {
+      flex: 0 0 auto; display: flex; gap: min(4vw, 31px); margin-top: min(1vw, 8px); justify-content: center;
+    }
     #confirmBtns button {
-      font-size: 5.5vw; padding: 3.5vw 7vw; border-radius: 12px; border: none; font-weight: bold;
+      font-size: min(5.5vw, 42px); padding: min(3vw, 23px) min(7vw, 54px);
+      border-radius: 12px; border: none; font-weight: bold; line-height: 1.25;
     }
     #btnOk { background: #2E7D32; color: white; }
     #btnNg { background: #fff; color: #B71C1C; border: 2px solid #B71C1C; }
@@ -141,8 +158,12 @@
   <!-- 退勤時の本人確認 -->
   <div id="confirmScreen">
     <div id="confirmName"></div>
-    <div class="cRow" id="cTimeRow"><div class="cLabel">きょうの じかん</div><div class="cValue" id="cTime"></div></div>
-    <div class="cRow" id="cWorkRow"><div class="cLabel">きょうの しごと</div><div id="cDetail"></div></div>
+    <div id="cSub">きょうの じかん　<span id="cTime"></span></div>
+    <div class="cRow" id="cWorkRow">
+      <div class="cLabel">きょうの しごと</div>
+      <div id="cDetail"></div>
+      <div id="cMore">▼ したに まだ あります</div>
+    </div>
     <div class="cRow" id="cTotalRow"><div class="cLabel">きょうの こうちん</div><div class="cValue" id="cWage"></div></div>
     <div id="confirmBtns">
       <button id="btnNg" onclick="onDiffer()">ちがう</button>
@@ -227,7 +248,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-09-22e";
+    const APP_VERSION = "v2026-09-22f";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -338,6 +359,7 @@
         document.getElementById("staffEnter").style.display = "none";
         document.getElementById("confirmBtns").style.display = "flex";
         document.getElementById("confirmScreen").style.display = "flex";
+        updateMoreHint();   // 画面を出したあとでないと、入りきるかどうかが測れない
       } catch (e) {
         // 画面を作る途中で失敗すると、打刻だけ済んで何も出ない状態になる。理由を出す。
         const el = document.getElementById("message");
@@ -381,7 +403,9 @@
         line.className = "dLine";
         const t = document.createElement("div");
         t.className = "dTask";
-        t.textContent = w.task;
+        // 「完成品作業（バスマット・イレクターパイプ…）」のような長い名前は括弧の前まで。
+        // 括弧の中は作業マスタ上の説明なので、本人が見分けるのに要らない。
+        t.textContent = shortTaskName(w.task);
         const a = document.createElement("div");
         a.className = "dAmount";
         a.textContent = Number(w.amount).toLocaleString() + "円";
@@ -408,6 +432,20 @@
         box.appendChild(row);
       });
     }
+
+    // 作業名の括弧書きを落とす。落としても空になるなら元のまま返す。
+    function shortTaskName(name) {
+      const s = String(name || "").split(/[（(]/)[0].trim();
+      return s || String(name || "");
+    }
+
+    // しごとの欄に続きがあるかを見て、案内を出し分ける
+    function updateMoreHint() {
+      const d = document.getElementById("cDetail");
+      const rest = d.scrollHeight - d.clientHeight - d.scrollTop;
+      document.getElementById("cMore").style.display = rest > 4 ? "block" : "none";
+    }
+    document.getElementById("cDetail").addEventListener("scroll", updateMoreHint);
 
     // 95分 → 「1じかん35ふん」
     function hhmm(min) {
