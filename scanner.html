@@ -91,6 +91,12 @@
     .slotBox .btn { font-size: 3.6vw; padding: 2vw 3.5vw; margin-top: 0; }
     #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
     #staffWho { font-size: 3.6vw; color: #1B5E20; }
+    .aRow { display: flex; align-items: center; gap: 2vw; padding: 2vw 0; border-bottom: 1px solid #eee; }
+    .aRow input[type=checkbox] { width: 7vw; height: 7vw; flex-shrink: 0; }
+    .aName { font-size: 4.2vw; font-weight: bold; flex: 1; }
+    .aInfo { font-size: 3.2vw; color: #666; }
+    .aPunch { font-size: 3vw; color: #1B5E20; font-weight: bold; }
+    .aNone { font-size: 3vw; color: #999; }
   </style>
 </head>
 <body>
@@ -129,6 +135,21 @@
       <input id="pinInput" type="password" inputmode="numeric">
       <button class="btn" onclick="doStaffAuth()">確認</button>
       <button class="btn btnGray" onclick="closeStaff()">やめる</button>
+    </div>
+
+    <!-- 本日の出席一覧（まとめてチェック） -->
+    <div class="box" id="listBox" style="display:none">
+      <label id="listLabel">本日の出席</label>
+      <div id="attendList"></div>
+      <button class="btn" onclick="saveAttendance()">登録する</button>
+      <button class="btn btnGray" onclick="backToMenu()">もどる</button>
+    </div>
+
+    <!-- 職員メニュー -->
+    <div class="box" id="menuBox" style="display:none">
+      <button class="btn" onclick="openAttendList()">本日の出席をチェックする</button>
+      <button class="btn" onclick="showPick()">記録を修正する</button>
+      <button class="btn btnGray" onclick="closeStaff()">とじる</button>
     </div>
 
     <!-- 日中に修正する時: 誰の記録を直すか選ぶ -->
@@ -358,12 +379,111 @@
       document.getElementById("pinBox").style.display = "block";
       document.getElementById("pickBox").style.display = "none";
       document.getElementById("editBox").style.display = "none";
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("listBox").style.display = "none";
       document.getElementById("staffTitle").textContent = "職員モード";
       document.getElementById("staffMsg").textContent = "";
       document.getElementById("staffWho").textContent = "";
       document.getElementById("pinInput").value = "";
       document.getElementById("pickId").value = "";
       staffName = null;
+    }
+
+
+    // ---- 職員メニュー ----
+    function backToMenu() {
+      document.getElementById("listBox").style.display = "none";
+      document.getElementById("pickBox").style.display = "none";
+      document.getElementById("editBox").style.display = "none";
+      document.getElementById("menuBox").style.display = "block";
+      document.getElementById("staffMsg").textContent = "";
+      confirmUid = null;
+    }
+
+    function showPick() {
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("pickBox").style.display = "block";
+    }
+
+    // ---- 本日の出席一覧 ----
+    let dayList = [];
+
+    function openAttendList() {
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("staffMsg").style.color = "#555";
+      document.getElementById("staffMsg").textContent = "読み込み中...";
+      callApi({ action: "dayList" }, (res) => {
+        if (res.status !== "ok") {
+          document.getElementById("staffMsg").style.color = "#B71C1C";
+          document.getElementById("staffMsg").textContent = res.message || "読み込めませんでした";
+          document.getElementById("menuBox").style.display = "block";
+          return;
+        }
+        dayList = res.list || [];
+        document.getElementById("staffMsg").textContent = "";
+        document.getElementById("listLabel").textContent = res.date + " の出席（" + dayList.length + "名）";
+        buildAttendList();
+        document.getElementById("listBox").style.display = "block";
+      }, () => {
+        document.getElementById("staffMsg").style.color = "#B71C1C";
+        document.getElementById("staffMsg").textContent = "通信エラー";
+        document.getElementById("menuBox").style.display = "block";
+      });
+    }
+
+    function buildAttendList() {
+      const box = document.getElementById("attendList");
+      box.innerHTML = "";
+      dayList.forEach(function (p, i) {
+        const row = document.createElement("div");
+        row.className = "aRow";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = p.attend;
+        cb.id = "att_" + i;
+
+        const wrap = document.createElement("div");
+        wrap.style.flex = "1";
+        const nm = document.createElement("div");
+        nm.className = "aName";
+        nm.textContent = p.name;
+        const info = document.createElement("div");
+        info.className = "aInfo";
+        info.textContent = p.planIn + "〜" + p.planOut + "　昼食:" + (p.lunch || "なし");
+        const st = document.createElement("div");
+        // QRで打刻済みかどうかが分かるようにする
+        if (p.punchedOut) { st.className = "aPunch"; st.textContent = "✓ 退勤ずみ"; }
+        else if (p.punchedIn) { st.className = "aPunch"; st.textContent = "✓ 出勤ずみ"; }
+        else { st.className = "aNone"; st.textContent = "打刻なし"; }
+        wrap.appendChild(nm); wrap.appendChild(info); wrap.appendChild(st);
+
+        row.appendChild(cb); row.appendChild(wrap);
+        box.appendChild(row);
+      });
+    }
+
+    function saveAttendance() {
+      const ids = [];
+      dayList.forEach(function (p, i) {
+        if (document.getElementById("att_" + i).checked) ids.push(p.uid);
+      });
+      document.getElementById("staffMsg").style.color = "#555";
+      document.getElementById("staffMsg").textContent = "登録中...";
+      callApi(withPin({ action: "setAttendance", uids: ids.join(",") }), (res) => {
+        const msg = document.getElementById("staffMsg");
+        if (res.status === "ok") {
+          msg.style.color = "#1B5E20";
+          msg.textContent = "登録しました（" + res.changed + "名を変更）";
+          openAttendList();
+        } else {
+          msg.style.color = "#B71C1C";
+          msg.textContent = res.message || "登録できませんでした";
+        }
+      }, () => {
+        document.getElementById("staffMsg").style.color = "#B71C1C";
+        document.getElementById("staffMsg").textContent = "通信エラー";
+      });
     }
 
     // 対象者を選ぶ（QRをかざす／IDを入力）
@@ -409,7 +529,7 @@
         document.getElementById("staffWho").textContent = staffName + " さんとして修正します";
         document.getElementById("pinBox").style.display = "none";
         if (staffPickMode && !confirmUid) {
-          document.getElementById("pickBox").style.display = "block";
+          document.getElementById("menuBox").style.display = "block";
           return;
         }
         loadEditor();
