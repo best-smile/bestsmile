@@ -135,6 +135,18 @@
     #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
     #staffWho { font-size: 3.6vw; color: #1B5E20; }
     #attendList { max-height: 55vh; overflow-y: auto; margin-bottom: 2vw; }
+    /* 記録を直す相手を名前で選ぶ一覧 */
+    #pickList { max-height: 45vh; overflow-y: auto; margin-bottom: 2vw; }
+    .pickName {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 3vw;
+      width: 100%; box-sizing: border-box; text-align: left;
+      padding: 3vw; margin-bottom: 1.5vw; border: 1px solid #ddd; border-radius: 8px;
+      background: #fff;
+    }
+    .pickNameText { font-size: 4.4vw; font-weight: bold; color: #222; }
+    .pickNameInfo { font-size: 3.2vw; color: #666; white-space: nowrap; }
+    /* 入力欄が width:100% で伸びて「開く」が縦に折り返してしまうのを防ぐ */
+    #pickBox .slotRow .btn { white-space: nowrap; flex-shrink: 0; margin-top: 0; }
     .aRow { display: flex; align-items: center; gap: 3vw; padding: 2.5vw 0; border-bottom: 1px solid #eee; }
     .aName { font-size: 4.2vw; font-weight: bold; flex: 1; }
     .aInfo { font-size: 3.2vw; color: #666; }
@@ -204,14 +216,15 @@
     <!-- 日中に修正する時: 誰の記録を直すか選ぶ -->
     <div class="box" id="pickBox" style="display:none">
       <label>どなたの記録を直しますか</label>
-      <div style="font-size:3.6vw;color:#1B5E20;margin-bottom:2vw">
-        QRカードをかざすか、利用者IDを入力してください
+      <div id="pickList"></div>
+      <div style="font-size:3.4vw;color:#666;margin:2vw 0 1vw">
+        一覧に無い方は、QRカードをかざすか利用者IDを入力してください
       </div>
       <div class="slotRow">
         <input id="pickId" type="text" placeholder="例: S001">
         <button class="btn" onclick="pickTarget()">開く</button>
       </div>
-      <button class="btn btnGray" onclick="closeStaff()">やめる</button>
+      <button class="btn btnGray" onclick="backToMenu()">もどる</button>
     </div>
 
     <div class="box" id="editBox" style="display:none">
@@ -248,7 +261,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-09-22f";
+    const APP_VERSION = "v2026-09-22g";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -531,6 +544,42 @@
     function showPick() {
       document.getElementById("menuBox").style.display = "none";
       document.getElementById("pickBox").style.display = "block";
+      buildPickList();
+    }
+
+    // 職員モードの画面はカメラを覆ってしまい、QRをかざす向きが分からない。
+    // 本日の予定者を名前で並べて、押すだけで開けるようにする。
+    function buildPickList() {
+      const box = document.getElementById("pickList");
+      if (dayList.length) return renderPickList();
+      box.innerHTML = "<div class='aNone'>よみこみ中...</div>";
+      callApi({ action: "dayList" }, (res) => {
+        if (res.status !== "ok") {
+          box.innerHTML = "<div class='aNone'>" + (res.message || "よみこめませんでした") + "</div>";
+          return;
+        }
+        dayList = res.list || [];
+        renderPickList();
+      }, () => { box.innerHTML = "<div class='aNone'>通信エラー（IDを入力するか、QRをかざしてください）</div>"; });
+    }
+
+    function renderPickList() {
+      const box = document.getElementById("pickList");
+      box.innerHTML = "";
+      dayList.forEach(function (p) {
+        const b = document.createElement("button");
+        b.className = "pickName";
+        b.onclick = function () { pickTarget(p.uid); };
+        const n = document.createElement("span");
+        n.className = "pickNameText";
+        n.textContent = p.name;
+        const s = document.createElement("span");
+        s.className = "pickNameInfo";
+        s.textContent = (p.attend === false ? "欠席" : (p.planIn || "") + "-" + (p.planOut || "")) +
+                        (p.confirmed ? " ✓確認済" : "");
+        b.appendChild(n); b.appendChild(s);
+        box.appendChild(b);
+      });
     }
 
     // ---- 本日の出席一覧 ----
@@ -659,14 +708,37 @@
         document.getElementById("pinBox").style.display = "none";
         if (staffPickMode && !confirmUid) {
           document.getElementById("menuBox").style.display = "block";
+          withTaskList(function () {}, function () {});   // 職員が選んでいる間に先読みしておく
           return;
         }
         loadEditor();
       }, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
-    function loadEditor() {
+    // 作業マスタはめったに変わらないのに、記録を直すたびに取りに行っていて遅かった。
+    // 端末に1日ぶん覚えさせて、2回目からは通信を省く。
+    const TASK_CACHE_KEY = "smile_tasklist_v1";
+    const TASK_CACHE_MS = 24 * 60 * 60 * 1000;
+
+    function readTaskCache() {
+      try {
+        const o = JSON.parse(localStorage.getItem(TASK_CACHE_KEY) || "null");
+        if (!o || !o.at || Date.now() - o.at > TASK_CACHE_MS) return null;
+        return o.data;
+      } catch (e) { return null; }   // 使えない端末でも動くようにする
+    }
+
+    function withTaskList(onOk, onErr) {
+      const cached = readTaskCache();
+      if (cached) return onOk(cached);
       callApi({ action: "taskList" }, (t) => {
+        try { localStorage.setItem(TASK_CACHE_KEY, JSON.stringify({ at: Date.now(), data: t })); } catch (e) {}
+        onOk(t);
+      }, onErr);
+    }
+
+    function loadEditor() {
+      withTaskList((t) => {
         taskList = (t.tasks || []).map(x => x.name);
         const lunchSel = document.getElementById("editLunch");
         lunchSel.innerHTML = "";
