@@ -34,28 +34,47 @@
     /* 退勤時の本人確認画面 */
     #confirmScreen {
       display: none; position: fixed; inset: 0; background: #fff; z-index: 10;
-      flex-direction: column; align-items: center; justify-content: center; padding: 4vw;
+      flex-direction: column; align-items: center; padding: 4vw;
       box-sizing: border-box; text-align: center;
+      /* 作業が多い日は中身が画面より高くなる。上から並べてスクロールできるようにしないと
+         「かくにん」ボタンが画面の外に出てしまう。 */
+      justify-content: flex-start; overflow: hidden;
     }
-    #confirmName { font-size: 8vw; font-weight: bold; color: #1B5E20; margin-bottom: 4vw; }
+    /* 上（名前・時間）／中（しごとの内訳＝あふれたらここだけスクロール）／下（こうちん・ボタン）。
+       こうしないと作業が多い日に合計とボタンが画面の外へ出てしまう。 */
+    #confirmName {
+      flex: 0 0 auto; font-size: 5.5vw; font-weight: bold; color: #1B5E20; margin-bottom: 2vw;
+    }
+    /* じかんは1行にまとめる。しごとの内訳に高さを回すため。 */
+    #cTimeRow { display: flex; align-items: baseline; justify-content: space-between; gap: 3vw; }
+    #cTimeRow .cLabel { margin-bottom: 0; }
+    #cTimeRow .cValue { font-size: 5.5vw; }
     .cRow {
+      flex: 0 0 auto;
       width: 92vw; max-width: 600px; background: #F1F8E9; border-radius: 12px;
-      padding: 3vw 4vw; margin-bottom: 3vw; text-align: left;
+      padding: 2.5vw 4vw; margin-bottom: 2vw; text-align: left;
+    }
+    #cWorkRow {
+      flex: 1 1 auto; min-height: 20vh; display: flex; flex-direction: column;
+      overflow: hidden; box-sizing: border-box;
     }
     .cLabel { font-size: 4vw; color: #555; margin-bottom: 1.5vw; }
     .cValue { font-size: 7vw; font-weight: bold; color: #222; }
-    .dRow { border-top: 1px solid #C5E1A5; padding: 2vw 0; }
+    /* 作業が多い日は、この欄だけがスクロールする */
+    #cDetail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    .dRow { border-top: 1px solid #C5E1A5; padding: 1.5vw 0; }
     .dRow:first-child { border-top: none; }
-    .dTime { font-size: 5.5vw; font-weight: bold; color: #1B5E20; }
-    .dLine { display: flex; justify-content: space-between; align-items: baseline; gap: 2vw; margin-top: 0.5vw; }
-    .dTask { font-size: 5vw; font-weight: bold; color: #222; }
+    .dHead { display: flex; align-items: baseline; gap: 2vw; }
+    .dTime { font-size: 5vw; font-weight: bold; color: #1B5E20; }
+    .dLine { display: flex; justify-content: space-between; align-items: baseline; gap: 2vw; }
+    .dTask { font-size: 4.6vw; font-weight: bold; color: #222; }
     .dCalc { font-size: 4.5vw; color: #444; margin-top: 0.5vw; }
-    .dRate { font-size: 3.8vw; color: #666; }
-    .dAmount { font-size: 5.5vw; font-weight: bold; color: #1B5E20; white-space: nowrap; }
+    .dRate { font-size: 3.6vw; color: #666; white-space: nowrap; }
+    .dAmount { font-size: 5vw; font-weight: bold; color: #1B5E20; white-space: nowrap; }
     #cTotalRow { background: #E8F5E9; border: 2px solid #2E7D32; }
-    #confirmBtns { display: flex; gap: 4vw; margin-top: 3vw; }
+    #confirmBtns { flex: 0 0 auto; display: flex; gap: 4vw; margin-top: 1vw; justify-content: center; }
     #confirmBtns button {
-      font-size: 6vw; padding: 4vw 8vw; border-radius: 12px; border: none; font-weight: bold;
+      font-size: 5.5vw; padding: 3.5vw 7vw; border-radius: 12px; border: none; font-weight: bold;
     }
     #btnOk { background: #2E7D32; color: white; }
     #btnNg { background: #fff; color: #B71C1C; border: 2px solid #B71C1C; }
@@ -119,8 +138,8 @@
   <!-- 退勤時の本人確認 -->
   <div id="confirmScreen">
     <div id="confirmName"></div>
-    <div class="cRow"><div class="cLabel">きょうの じかん</div><div class="cValue" id="cTime"></div></div>
-    <div class="cRow"><div class="cLabel">きょうの しごと</div><div id="cDetail"></div></div>
+    <div class="cRow" id="cTimeRow"><div class="cLabel">きょうの じかん</div><div class="cValue" id="cTime"></div></div>
+    <div class="cRow" id="cWorkRow"><div class="cLabel">きょうの しごと</div><div id="cDetail"></div></div>
     <div class="cRow" id="cTotalRow"><div class="cLabel">きょうの こうちん</div><div class="cValue" id="cWage"></div></div>
     <div id="confirmBtns">
       <button id="btnNg" onclick="onDiffer()">ちがう</button>
@@ -318,9 +337,16 @@
         const row = document.createElement("div");
         row.className = "dRow";
 
+        // 時刻と単価は1行にまとめる。行が3段になると画面からはみ出すため。
+        const head = document.createElement("div");
+        head.className = "dHead";
         const time = document.createElement("div");
         time.className = "dTime";
         time.textContent = w.from + " 〜 " + w.to;
+        const r = document.createElement("div");
+        r.className = "dRate";
+        r.textContent = Number(w.rate).toLocaleString() + "円／じかん";
+        head.appendChild(time); head.appendChild(r);
 
         const line = document.createElement("div");
         line.className = "dLine";
@@ -332,11 +358,7 @@
         a.textContent = Number(w.amount).toLocaleString() + "円";
         line.appendChild(t); line.appendChild(a);
 
-        const r = document.createElement("div");
-        r.className = "dRate";
-        r.textContent = Number(w.rate).toLocaleString() + "円／じかん";
-
-        row.appendChild(time); row.appendChild(line); row.appendChild(r);
+        row.appendChild(head); row.appendChild(line);
         box.appendChild(row);
       });
     }
