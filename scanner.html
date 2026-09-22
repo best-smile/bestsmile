@@ -261,7 +261,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-09-22g";
+    const APP_VERSION = "v2026-09-22h";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -271,7 +271,17 @@
     let staffPickMode = false;   // 日中の修正で、対象者をこれから選ぶ状態
 
     // 読み取りだけの操作。失敗しても安全にやり直せる（書き込み系は二重記録になるのでやり直さない）
-    const RETRYABLE = ["summary", "taskList", "staffAuth"];
+    const RETRYABLE = ["summary", "taskList", "staffAuth", "ping"];
+
+    // Apps Script はしばらく使わないと起動に20秒ほどかかる（計測値）。
+    // 実際に使うときにこれを待たされるので、開いている間は数分おきに空打ちして温めておく。
+    const WARMUP_MS = 4 * 60 * 1000;
+
+    function warmUp() {
+      if (document.visibilityState === "hidden") return;   // 画面を見ていない時は呼ばない
+      if (busy) return;                                    // 打刻中は邪魔しない
+      callApiOnce({ action: "ping" }, function () {}, function () {});
+    }
 
     function callApi(params, onSuccess, onError) {
       const retryable = RETRYABLE.indexOf(params.action) !== -1;
@@ -925,6 +935,16 @@
       html5QrCode.start(cameraId, { fps: 10, qrbox: 250 }, onScanSuccess);
     }).catch(() => {
       document.getElementById("message").textContent = "カメラの起動に失敗しました。手入力をご利用ください";
+    });
+
+    // ---- 起動時の準備（ここは他の定数がすべて出そろってから実行する） ----
+    // 開いた時点でサーバーを温め、作業マスタも先に取っておく。
+    // こうしないと、朝いちばんの打刻や職員モードで20秒ほど待たされる。
+    warmUp();
+    withTaskList(function () {}, function () {});
+    setInterval(warmUp, WARMUP_MS);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") warmUp();
     });
   </script>
 </body>
