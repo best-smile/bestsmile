@@ -261,7 +261,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-09-22h";
+    const APP_VERSION = "v2026-10-06a";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -284,17 +284,34 @@
     }
 
     function callApi(params, onSuccess, onError) {
+      // 打刻（QR読み取り。actionなし）は、通信エラーでも記録されていることがある。サーバー側が
+      // 10分以内の同じ人の読み取りを「記録済み」として無視するので、二重には記録されない。
+      // そのため打刻は2回までやり直す。読み取りだけの操作は1回やり直す。
+      const isScan = !params.action;
       const retryable = RETRYABLE.indexOf(params.action) !== -1;
-      callApiOnce(params, onSuccess, function (err) {
-        // Apps Scriptは久しぶりの実行だと起動に時間がかかることがあるため、一度だけやり直す
-        if (retryable) callApiOnce(params, onSuccess, onError);
-        else onError(err);
-      });
+      const maxRetry = isScan ? 2 : (retryable ? 1 : 0);
+      let tries = 0;
+      function attempt() {
+        callApiOnce(params, onSuccess, function (err) {
+          if (tries < maxRetry) {
+            tries++;
+            if (isScan) {
+              const el = document.getElementById("message");
+              el.className = "";
+              el.textContent = "つうしんに じかんが かかっています…もういちど ためしています";
+            }
+            setTimeout(attempt, isScan ? 1500 : 0);
+          } else {
+            onError(err);
+          }
+        });
+      }
+      attempt();
     }
 
     function callApiOnce(params, onSuccess, onError) {
       const cbName = "jsonp_cb_" + (jsonpCounter++);
-      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 30000);
+      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 45000);
 
       function cleanup() {
         clearTimeout(timeoutId);
@@ -357,6 +374,14 @@
             "（しょくいんを よんでください）";
         }
       } else if (res.status === "duplicate") {
+        // 通信エラーで確認画面が出なかった人が読み直したとき。まだ本人確認が済んでいなければ、
+        // 確認画面をもう一度出す。
+        if (res.kubun === "退所" && res.summary && res.summary.status === "ok") {
+          el.className = "ok";
+          el.textContent = `${res.name}さん おつかれさまでした（${res.time || ""} 退所）`;
+          setTimeout(() => showConfirm(res.summary), 300);
+          return;
+        }
         el.className = "duplicate";
         el.textContent = `${res.name}さん、${res.message}`;
       } else {
