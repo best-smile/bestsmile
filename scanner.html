@@ -55,6 +55,7 @@
       flex: 0 0 auto; font-size: min(4.2vw, 32px); color: #555;
       margin-bottom: min(2vw, 15px); line-height: 1.3;
     }
+    #cExtra { display:flex; flex-wrap:wrap; justify-content:center; gap:0 5vw; font-size:min(4.4vw, 34px); font-weight:bold; color:#333; margin:0.5vw 0 1.5vw; }
     #cSub #cTime { font-size: min(5vw, 38px); font-weight: bold; color: #222; }
     .cRow {
       flex: 0 0 auto;
@@ -171,6 +172,7 @@
   <div id="confirmScreen">
     <div id="confirmName"></div>
     <div id="cSub">きょうの じかん　<span id="cTime"></span></div>
+    <div id="cExtra"><span id="cLunch"></span><span id="cSougei"></span></div>
     <div class="cRow" id="cWorkRow">
       <div class="cLabel">きょうの しごと</div>
       <div id="cDetail"></div>
@@ -245,6 +247,13 @@
         <button class="btn" onclick="saveLunch()">保存</button>
       </div>
 
+      <label style="margin-top:3vw">送迎（往・復）</label>
+      <div class="slotRow">
+        <span>往</span><select id="editGo"><option>あり</option><option>なし</option></select>
+        <span>復</span><select id="editBack"><option>あり</option><option>なし</option></select>
+        <button class="btn" onclick="saveSougei()">保存</button>
+      </div>
+
       <label style="margin-top:3vw">作業内容（時間帯ごと）</label>
       <div id="slotList"></div>
 
@@ -261,7 +270,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-10-06a";
+    const APP_VERSION = "v2026-10-12a";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -395,12 +404,22 @@
       }, 3000);
     }
 
+    // 確認画面用のひらがな表示（昼食・送迎）
+    function lunchKana(v) {
+      if (v === "ご飯あり") return "ごはん あり";
+      if (v === "おかずのみ") return "おかずだけ";
+      return "なし";
+    }
+    function sougeiKana(v) { return v === "あり" ? "あり" : "なし"; }
+
     function showConfirm(s) {
       try {
         confirmUid = s.uid;
         document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
         // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
         document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
+        document.getElementById("cLunch").textContent = "ひるごはん　" + lunchKana(s.lunch);
+        document.getElementById("cSougei").textContent = "おくりむかえ　いき " + sougeiKana(s.sougeiGo) + "　かえり " + sougeiKana(s.sougeiBack);
         buildDetail(s);
         document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
         document.getElementById("staffCall").style.display = "none";
@@ -536,6 +555,30 @@
     let staffName = null;
     let staffSummary = null;
     let taskList = [];
+    let taskObjs = [];   // [{name, rate}]。作業の選択欄を、単価ごとのグループに分けて出すために使う
+
+    // 作業の選択欄に、単価ごと（350円、375円…）のグループに分けて作業名を入れる。
+    // 作業が増えても、縦に長く並ぶだけにならず、探しやすい。
+    function fillTaskOptions(sel) {
+      const groups = {};
+      const rates = [];
+      taskObjs.forEach(function (x) {
+        const k = Number(x.rate) || 0;
+        if (!groups[k]) { groups[k] = []; rates.push(k); }
+        groups[k].push(x.name);
+      });
+      rates.sort(function (a, b) { return a - b; });
+      rates.forEach(function (k) {
+        const g = document.createElement("optgroup");
+        g.label = "【" + k + "円／時間】";
+        groups[k].forEach(function (name) {
+          const op = document.createElement("option");
+          op.value = name; op.textContent = name;
+          g.appendChild(op);
+        });
+        sel.appendChild(g);
+      });
+    }
 
     // 退勤時の確認画面から入る（対象者は確定済み）
     function openStaff() {
@@ -752,7 +795,7 @@
 
     // 作業マスタはめったに変わらないのに、記録を直すたびに取りに行っていて遅かった。
     // 端末に1日ぶん覚えさせて、2回目からは通信を省く。
-    const TASK_CACHE_KEY = "smile_tasklist_v1";
+    const TASK_CACHE_KEY = "smile_tasklist_v2";
     const TASK_CACHE_MS = 24 * 60 * 60 * 1000;
 
     function readTaskCache() {
@@ -774,7 +817,8 @@
 
     function loadEditor() {
       withTaskList((t) => {
-        taskList = (t.tasks || []).map(x => x.name);
+        taskObjs = t.tasks || [];
+        taskList = taskObjs.map(x => x.name);
         const lunchSel = document.getElementById("editLunch");
         lunchSel.innerHTML = "";
         (t.lunchOptions || []).forEach(o => {
@@ -800,6 +844,8 @@
           document.getElementById("punchNote").textContent =
             "実際の打刻： 出勤 " + (s.actualIn || "なし") + " ／ 退勤 " + (s.actualOut || "なし");
           lunchSel.value = s.lunch || "なし";
+          document.getElementById("editGo").value = s.sougeiGo || "なし";
+          document.getElementById("editBack").value = s.sougeiBack || "なし";
           buildSlotList(s);
           document.getElementById("editBox").style.display = "block";
         }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
@@ -826,11 +872,7 @@
         const blank = document.createElement("option");
         blank.value = ""; blank.textContent = "（作業なし）";
         sel.appendChild(blank);
-        taskList.forEach(name => {
-          const op = document.createElement("option");
-          op.value = name; op.textContent = name;
-          sel.appendChild(op);
-        });
+        fillTaskOptions(sel);
         sel.value = (s.slotTasks && s.slotTasks[i]) || "";
         sel.onchange = () => saveWork(i, sel.value, "1");
         wrap.appendChild(sel);
@@ -864,11 +906,7 @@
           const b2 = document.createElement("option");
           b2.value = ""; b2.textContent = "（作業なし）";
           sel2.appendChild(b2);
-          taskList.forEach(name => {
-            const op = document.createElement("option");
-            op.value = name; op.textContent = name;
-            sel2.appendChild(op);
-          });
+          fillTaskOptions(sel2);
           sel2.value = (s.slotTasks2 && s.slotTasks2[i]) || "";
           sel2.onchange = () => saveWork(i, sel2.value, "2");
           wrap.appendChild(lab2);
@@ -918,6 +956,12 @@
 
     function saveLunch() {
       callApi(withPin({ uid: confirmUid, action: "updateLunch", lunch: document.getElementById("editLunch").value }),
+        afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    function saveSougei() {
+      callApi(withPin({ uid: confirmUid, action: "updateSougei", go: document.getElementById("editGo").value,
+        back: document.getElementById("editBack").value }),
         afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
     }
 
