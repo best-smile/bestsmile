@@ -451,7 +451,48 @@
         box.appendChild(p);
         return;
       }
-      list.forEach(function (w) {
+      // 作業と作業のあいだのすき間は「きゅうけい ○ふん」として出す（マスタの休憩時間帯など）。
+      // お昼（12:00〜13:00）は休憩に数えない。作業が続いている（有給休憩）ところは出ない。
+      const toMin = function (t) { const q = String(t).split(":"); return Number(q[0]) * 60 + Number(q[1]); };
+      const hm = function (m) { return Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2); };
+      const items = [];
+      list.forEach(function (w, i) {
+        items.push({ w: w });
+        const nx = list[i + 1];
+        if (!nx) return;
+        let a = toMin(w.to), b = toMin(nx.from);
+        const segs = [];
+        if (a < 720 && b > 780) { segs.push([a, 720]); segs.push([780, b]); }
+        else if (a >= 720 && a < 780) { if (b > 780) segs.push([780, b]); }
+        else if (b > 720 && b <= 780) { if (a < 720) segs.push([a, 720]); }
+        else if (!(a >= 720 && b <= 780)) { segs.push([a, b]); }
+        segs.forEach(function (g) { if (g[1] - g[0] > 0) items.push({ brk: g }); });
+      });
+      items.forEach(function (it) {
+        if (it.brk) {
+          const bm = it.brk[1] - it.brk[0];
+          const br = document.createElement("div");
+          br.className = "dRow";
+          const bh = document.createElement("div");
+          bh.className = "dHead";
+          const bt = document.createElement("div");
+          bt.className = "dTime";
+          bt.textContent = hm(it.brk[0]) + " 〜 " + hm(it.brk[1]);
+          bh.appendChild(bt);
+          const bl = document.createElement("div");
+          bl.className = "dLine";
+          const bn = document.createElement("div");
+          bn.className = "dTask";
+          bn.textContent = "きゅうけい";
+          const bam = document.createElement("div");
+          bam.className = "dAmount";
+          bam.textContent = bm + "ふん";
+          bl.appendChild(bn); bl.appendChild(bam);
+          br.appendChild(bh); br.appendChild(bl);
+          box.appendChild(br);
+          return;
+        }
+        const w = it.w;
         const row = document.createElement("div");
         row.className = "dRow";
 
