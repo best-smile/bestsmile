@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>【試験用】出席QR打刻</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      font-family: "Yu Gothic", "Meiryo", -apple-system, sans-serif;
+      background: #f5f5f5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #reader { width: 90vw; max-width: 480px; border-radius: 12px; overflow: hidden; }
+    #message {
+      margin-top: 24px; font-size: 7vw; text-align: center;
+      min-height: 3em; display: flex; align-items: center; justify-content: center;
+      padding: 0 16px;
+    }
+    .ok { color: #1B5E20; font-weight: bold; }
+    .invalid { color: #B71C1C; font-weight: bold; }
+    .duplicate { color: #888; }
+    #manualBtn, #staffBtn {
+      margin-top: 16px; padding: 12px 24px; font-size: 4vw; border-radius: 8px;
+      border: 1px solid #999; background: white;
+    }
+    #staffBtn { margin-left: 8px; border-color: #1F4E79; color: #1F4E79; }
+    #manualBox { display: none; margin-top: 16px; }
+    #manualBox input { font-size: 5vw; padding: 8px; width: 40vw; }
+    #manualBox button { font-size: 5vw; padding: 8px 16px; }
+    #configNote { font-size: 3vw; color: #B71C1C; margin-top: 8px; text-align: center; padding: 0 16px; }
+    #appVer { font-size: 2.6vw; color: #999; margin-top: 6px; text-align: center; }
+
+    /* 退勤時の本人確認画面 */
+    /* 文字の大きさは vw（画面の横幅）で決めているが、横に広く縦が短い画面
+       （1024×600のような横向きタブレット）だと文字だけ大きくなって縦に入らなくなる。
+       min() で頭打ちにしてある。上限は幅768pxのときの値なので、iPadの見た目は変わらない。 */
+    #confirmScreen {
+      display: none; position: fixed; inset: 0; background: #fff; z-index: 10;
+      flex-direction: column; align-items: center; padding: min(4vw, 31px);
+      box-sizing: border-box; text-align: center;
+      /* 作業が多い日は中身が画面より高くなる。上から並べてスクロールできるようにしないと
+         「かくにん」ボタンが画面の外に出てしまう。 */
+      justify-content: flex-start; overflow: hidden;
+    }
+    /* 上（名前・時間）／中（しごとの内訳＝あふれたらここだけスクロール）／下（こうちん・ボタン）。
+       こうしないと作業が多い日に合計とボタンが画面の外へ出てしまう。 */
+    #confirmName {
+      flex: 0 0 auto; font-size: min(5.5vw, 42px); font-weight: bold; color: #1B5E20;
+      margin-bottom: min(2vw, 15px); line-height: 1.25;
+    }
+    /* じかんは枠を持たせず名前の下に置く。そのぶんの高さをしごとの内訳に回すため。 */
+    #cSub {
+      flex: 0 0 auto; font-size: min(4.2vw, 32px); color: #555;
+      margin-bottom: min(2vw, 15px); line-height: 1.3;
+    }
+    #cExtra { display:flex; flex-wrap:wrap; justify-content:center; gap:0 5vw; font-size:min(4.4vw, 34px); font-weight:bold; color:#333; margin:0.5vw 0 1.5vw; }
+    #cSub #cTime { font-size: min(5vw, 38px); font-weight: bold; color: #222; }
+    .cRow {
+      flex: 0 0 auto;
+      width: 92vw; max-width: 600px; background: #F1F8E9; border-radius: 12px;
+      padding: min(2.2vw, 17px) min(4vw, 31px); margin-bottom: min(2vw, 15px); text-align: left;
+    }
+    #cWorkRow {
+      /* min-height を付けると、画面が低いときに合計とボタンを押し出してしまう。
+         残った高さをそのまま使い、入りきらないぶんは中でスクロールさせる。 */
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+      overflow: hidden; box-sizing: border-box;
+    }
+    .cLabel { font-size: min(4vw, 31px); color: #555; margin-bottom: min(0.8vw, 6px); line-height: 1.2; }
+    .cValue { font-size: min(7vw, 54px); font-weight: bold; color: #222; line-height: 1.2; }
+    /* 作業が多い日は、この欄だけがスクロールする */
+    #cDetail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    /* 枠に入りきらない作業があることを知らせる。出ていないと、見えていない作業のまま確認されてしまう。 */
+    #cMore {
+      display: none; flex: 0 0 auto; font-size: min(3.8vw, 29px); font-weight: bold; color: #B71C1C;
+      text-align: center; padding-top: min(1vw, 8px); margin-top: min(1vw, 8px);
+      border-top: 1px dashed #C5E1A5; line-height: 1.3;
+    }
+    .dRow { border-top: 1px solid #C5E1A5; padding: min(1.2vw, 9px) 0; }
+    .dRow:first-child { border-top: none; }
+    .dHead { display: flex; align-items: baseline; gap: min(2vw, 15px); }
+    .dTime { font-size: min(5vw, 38px); font-weight: bold; color: #1B5E20; line-height: 1.25; }
+    .dLine { display: flex; justify-content: space-between; align-items: baseline; gap: min(2vw, 15px); }
+    .dTask { font-size: min(4.6vw, 35px); font-weight: bold; color: #222; line-height: 1.25; }
+    .dCalc { font-size: min(4.5vw, 35px); color: #444; margin-top: 0.5vw; }
+    .dRate { font-size: min(3.6vw, 28px); color: #666; white-space: nowrap; }
+    .dAmount { font-size: min(5vw, 38px); font-weight: bold; color: #1B5E20; white-space: nowrap; line-height: 1.25; }
+    #cTotalRow { background: #E8F5E9; border: 2px solid #2E7D32; }
+    #confirmBtns {
+      flex: 0 0 auto; display: flex; gap: min(4vw, 31px); margin-top: min(1vw, 8px); justify-content: center;
+    }
+    #confirmBtns button {
+      font-size: min(5.5vw, 42px); padding: min(3vw, 23px) min(7vw, 54px);
+      border-radius: 12px; border: none; font-weight: bold; line-height: 1.25;
+    }
+    #btnOk { background: #2E7D32; color: white; }
+    #btnNg { background: #fff; color: #B71C1C; border: 2px solid #B71C1C; }
+    #staffCall { display: none; font-size: 6vw; color: #B71C1C; font-weight: bold; margin-top: 4vw; }
+    #staffEnter { display: none; margin-top: 4vw; }
+    #staffEnter button { font-size: 4.5vw; padding: 3vw 6vw; border-radius: 10px; border: 1px solid #555; background: #fff; }
+
+    /* 職員モード */
+    #staffScreen {
+      display: none; position: fixed; inset: 0; background: #FAFAFA; z-index: 20;
+      flex-direction: column; align-items: center; padding: 4vw; box-sizing: border-box;
+      overflow-y: auto;
+    }
+    #staffScreen h2 { font-size: 5vw; margin: 2vw 0; }
+    #staffScreen .box {
+      width: 94vw; max-width: 640px; background: #fff; border: 1px solid #ddd;
+      border-radius: 10px; padding: 3vw; margin-bottom: 3vw;
+    }
+    #staffScreen label { font-size: 3.6vw; color: #555; display: block; margin-bottom: 1vw; }
+    #staffScreen input:not([type=checkbox]), #staffScreen select {
+      font-size: 4.5vw; padding: 2vw; width: 100%; box-sizing: border-box;
+    }
+    #staffScreen input[type=checkbox] {
+      width: 8vw; height: 8vw; flex-shrink: 0; margin: 0;
+    }
+    #staffScreen .btn {
+      font-size: 4.5vw; padding: 3vw 6vw; border-radius: 10px; border: none;
+      background: #1F4E79; color: #fff; font-weight: bold; margin-top: 2vw;
+    }
+    #staffScreen .btnGray { background: #777; }
+    .slotRow { display: flex; gap: 2vw; align-items: center; margin-bottom: 2vw; }
+    .slotRow span { font-size: 3.4vw; width: 26vw; flex-shrink: 0; }
+    .slotBox { border: 1px solid #e0e0e0; border-radius: 8px; padding: 2vw; margin-bottom: 2.5vw; background: #FCFCFC; }
+    .slotHead { font-size: 4vw; font-weight: bold; color: #1F4E79; margin-bottom: 1.5vw; }
+    .slotWarn { border: 2px solid #B71C1C; background: #FFF3F3; }
+    .slotWarn .slotHead { color: #B71C1C; }
+    .slotBox select { margin-bottom: 2vw; }
+    .restLabel { font-size: 3.4vw; color: #1F4E79; margin: 1vw 0; font-weight: bold; }
+    .slotBox .btn { font-size: 3.6vw; padding: 2vw 3.5vw; margin-top: 0; }
+    #staffMsg { font-size: 4vw; color: #B71C1C; min-height: 1.5em; }
+    #staffWho { font-size: 3.6vw; color: #1B5E20; }
+    #attendList { max-height: 55vh; overflow-y: auto; margin-bottom: 2vw; }
+    /* 記録を直す相手を名前で選ぶ一覧 */
+    #pickList { max-height: 45vh; overflow-y: auto; margin-bottom: 2vw; }
+    .pickName {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 3vw;
+      width: 100%; box-sizing: border-box; text-align: left;
+      padding: 3vw; margin-bottom: 1.5vw; border: 1px solid #ddd; border-radius: 8px;
+      background: #fff;
+    }
+    .pickNameText { font-size: 4.4vw; font-weight: bold; color: #222; }
+    .pickNameInfo { font-size: 3.2vw; color: #666; white-space: nowrap; }
+    /* 入力欄が width:100% で伸びて「開く」が縦に折り返してしまうのを防ぐ */
+    #pickBox .slotRow .btn { white-space: nowrap; flex-shrink: 0; margin-top: 0; }
+    .aRow { display: flex; align-items: center; gap: 3vw; padding: 2.5vw 0; border-bottom: 1px solid #eee; }
+    .aName { font-size: 4.2vw; font-weight: bold; flex: 1; }
+    .aInfo { font-size: 3.2vw; color: #666; }
+    .aPunch { font-size: 3vw; color: #1B5E20; font-weight: bold; }
+    .aNone { font-size: 3vw; color: #999; }
+  </style>
+</head>
+<body>
+  <div id="reader"></div>
+  <div id="message">QRカードをかざしてください</div>
+  <button id="manualBtn" onclick="showManual()">手入力</button>
+  <button id="staffBtn" onclick="openStaffPick()">職員メニュー</button>
+  <div id="manualBox">
+    <input id="manualId" placeholder="利用者ID (例: S001)">
+    <button onclick="submitManual()">送信</button>
+  </div>
+  <div id="configNote"></div>
+  <!-- タブレットが古いファイルを掴んでいないか、その場で見分けるための版番号 -->
+  <div id="appVer"></div>
+
+  <!-- 退勤時の本人確認 -->
+  <div id="confirmScreen">
+    <div id="confirmName"></div>
+    <div id="cSub">きょうの じかん　<span id="cTime"></span></div>
+    <div id="cExtra"><span id="cLunch"></span><span id="cSougei"></span></div>
+    <div class="cRow" id="cWorkRow">
+      <div class="cLabel">きょうの しごと</div>
+      <div id="cDetail"></div>
+      <div id="cMore">▼ したに まだ あります</div>
+    </div>
+    <div class="cRow" id="cTotalRow"><div class="cLabel">きょうの こうちん</div><div class="cValue" id="cWage"></div></div>
+    <div id="confirmBtns">
+      <button id="btnNg" onclick="onDiffer()">ちがう</button>
+      <button id="btnOk" onclick="onConfirm()">✓ かくにん</button>
+    </div>
+    <div id="staffCall">しょくいんを よんでください</div>
+    <div id="staffEnter"><button onclick="openStaff()">職員の方はこちら</button></div>
+  </div>
+
+  <!-- 職員モード（暗証番号で保護） -->
+  <div id="staffScreen">
+    <h2 id="staffTitle">職員モード</h2>
+    <div id="staffWho"></div>
+    <div id="staffMsg"></div>
+
+    <div class="box" id="pinBox">
+      <label>暗証番号</label>
+      <input id="pinInput" type="password" inputmode="numeric">
+      <button class="btn" onclick="doStaffAuth()">確認</button>
+      <button class="btn btnGray" onclick="closeStaff()">やめる</button>
+    </div>
+
+    <!-- 本日の出席一覧（まとめてチェック） -->
+    <div class="box" id="listBox" style="display:none">
+      <label id="listLabel">本日の出席</label>
+      <div id="attendList"></div>
+      <button class="btn" onclick="saveAttendance()">登録する</button>
+      <button class="btn btnGray" onclick="backToMenu()">もどる</button>
+    </div>
+
+    <!-- 職員メニュー -->
+    <div class="box" id="menuBox" style="display:none">
+      <button class="btn" onclick="openAttendList()">本日の出席をチェックする</button>
+      <button class="btn" onclick="showPick()">記録を修正する</button>
+      <button class="btn" onclick="openLater()">かくにんが まだの日（押し忘れ）</button>
+      <button class="btn btnGray" onclick="closeStaff()">とじる</button>
+    </div>
+
+    <!-- 後日のかくにん（押し忘れた日の振り返り）。本人が押し、職員は見守る -->
+    <div class="box" id="laterBox" style="display:none">
+      <label id="laterLabel"></label>
+      <div style="font-size:3.2vw;color:#666;margin:1vw 0 2vw">本人が自分で「かくにん」を押します。職員は見守ってください。押せない方は、紙に署名をもらってください。</div>
+      <div id="laterList"></div>
+      <button class="btn btnGray" id="laterBack">もどる</button>
+    </div>
+
+    <!-- 日中に修正する時: 誰の記録を直すか選ぶ -->
+    <div class="box" id="pickBox" style="display:none">
+      <label>どなたの記録を直しますか</label>
+      <div id="pickList"></div>
+      <div style="font-size:3.4vw;color:#666;margin:2vw 0 1vw">
+        一覧に無い方は、QRカードをかざすか利用者IDを入力してください
+      </div>
+      <div class="slotRow">
+        <input id="pickId" type="text" placeholder="例: S001">
+        <button class="btn" onclick="pickTarget()">開く</button>
+      </div>
+      <button class="btn btnGray" onclick="backToMenu()">もどる</button>
+    </div>
+
+    <div class="box" id="editBox" style="display:none">
+      <label>出勤・退勤時刻</label>
+      <div class="slotRow">
+        <span>出勤</span><input id="editIn" type="time">
+        <button class="btn" onclick="saveTime('in')">保存</button>
+      </div>
+      <div class="slotRow">
+        <span>退勤</span><input id="editOut" type="time">
+        <button class="btn" onclick="saveTime('out')">保存</button>
+      </div>
+      <div id="punchNote" style="font-size:3.2vw;color:#777;margin-top:1vw"></div>
+
+      <label style="margin-top:3vw">昼食</label>
+      <div class="slotRow">
+        <select id="editLunch"></select>
+        <button class="btn" onclick="saveLunch()">保存</button>
+      </div>
+
+      <label style="margin-top:3vw">送迎（往・復）</label>
+      <div class="slotRow">
+        <span>往</span><select id="editGo"><option>あり</option><option>なし</option></select>
+        <span>復</span><select id="editBack"><option>あり</option><option>なし</option></select>
+        <button class="btn" onclick="saveSougei()">保存</button>
+      </div>
+
+      <label style="margin-top:3vw">作業内容（時間帯ごと）</label>
+      <div id="slotList"></div>
+
+      <button class="btn btnGray" onclick="closeStaff()">修正を終えて戻る</button>
+    </div>
+  </div>
+
+  <script>
+    const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyYM2ZNUXJSh39ksQ1hFG3JRiRU5ukWIOs6TsAaVCk4ZT_zwJ34zXflRavX5-IvdGPh/exec";
+
+    if (WEBAPP_URL.indexOf("WEBAPP_URL_HERE") !== -1) {
+      document.getElementById("configNote").textContent =
+        "設定が未完了です（scanner.html内のWEBAPP_URLを書き換えてください）";
+    }
+
+    // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
+    const APP_VERSION = "試験用 v2026-10-29a";
+    document.getElementById("appVer").textContent = APP_VERSION;
+    document.getElementById("configNote").style.cssText = "color:#c62828;font-weight:bold;font-size:4vw;margin:1vw 0";
+    document.getElementById("configNote").textContent = "【試験用】本番ではありません（試験用の記録に書き込みます）";
+
+    let busy = false;
+    let lastResultAt = 0;
+    let jsonpCounter = 0;
+    let confirmUid = null;
+    let staffPickMode = false;   // 日中の修正で、対象者をこれから選ぶ状態
+
+    // 読み取りだけの操作。失敗しても安全にやり直せる（書き込み系は二重記録になるのでやり直さない）
+    const RETRYABLE = ["summary", "taskList", "staffAuth", "ping", "laterPeople", "laterDays", "laterSummary"];
+
+    // Apps Script はしばらく使わないと起動に20秒ほどかかる（計測値）。
+    // 実際に使うときにこれを待たされるので、開いている間は数分おきに空打ちして温めておく。
+    const WARMUP_MS = 4 * 60 * 1000;
+
+    function warmUp() {
+      if (document.visibilityState === "hidden") return;   // 画面を見ていない時は呼ばない
+      if (busy) return;                                    // 打刻中は邪魔しない
+      callApiOnce({ action: "ping" }, function () {}, function () {});
+    }
+
+    function callApi(params, onSuccess, onError) {
+      // 打刻（QR読み取り。actionなし）は、通信エラーでも記録されていることがある。サーバー側が
+      // 10分以内の同じ人の読み取りを「記録済み」として無視するので、二重には記録されない。
+      // そのため打刻は2回までやり直す。読み取りだけの操作は1回やり直す。
+      const isScan = !params.action;
+      const retryable = RETRYABLE.indexOf(params.action) !== -1;
+      const maxRetry = isScan ? 2 : (retryable ? 1 : 0);
+      let tries = 0;
+      function attempt() {
+        callApiOnce(params, onSuccess, function (err) {
+          if (tries < maxRetry) {
+            tries++;
+            if (isScan) {
+              const el = document.getElementById("message");
+              el.className = "";
+              el.textContent = "つうしんに じかんが かかっています…もういちど ためしています";
+            }
+            setTimeout(attempt, isScan ? 1500 : 0);
+          } else {
+            onError(err);
+          }
+        });
+      }
+      attempt();
+    }
+
+    function callApiOnce(params, onSuccess, onError) {
+      const cbName = "jsonp_cb_" + (jsonpCounter++);
+      const timeoutId = setTimeout(() => { cleanup(); onError(new Error("タイムアウト")); }, 45000);
+
+      function cleanup() {
+        clearTimeout(timeoutId);
+        delete window[cbName];
+        const s = document.getElementById(cbName);
+        if (s) s.remove();
+      }
+
+      window[cbName] = function (data) { cleanup(); onSuccess(data); };
+
+      const query = Object.keys(params).map(k =>
+        encodeURIComponent(k) + "=" + encodeURIComponent(params[k])
+      ).join("&") + "&callback=" + cbName;
+
+      const script = document.createElement("script");
+      script.id = cbName;
+      script.src = WEBAPP_URL + "?" + query;
+      script.onerror = () => { cleanup(); onError(new Error("通信エラー")); };
+      document.body.appendChild(script);
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      if (busy || now - lastResultAt < 2000) return;
+      // 職員が対象者を選んでいる最中は、打刻せずにその人の記録を開く
+      if (staffPickMode && document.getElementById("pickBox").style.display === "block") {
+        lastResultAt = now;
+        pickTarget(decodedText.trim());
+        return;
+      }
+      if (document.getElementById("staffScreen").style.display === "flex") return;
+      if (document.getElementById("confirmScreen").style.display === "flex") return;
+      busy = true;
+      lastResultAt = now;
+      // 応答まで数秒かかる。待っている間も何か出しておかないと、読めていないと思われる。
+      const el = document.getElementById("message");
+      el.className = "";
+      el.textContent = "よみとりました　しばらく おまちください…";
+      callApi({ uid: decodedText.trim() }, onScanResult, onScanError);
+    }
+
+    function onScanResult(res) {
+      const el = document.getElementById("message");
+      if (res.status === "ok") {
+        el.className = "ok";
+        // 来所か退所かを必ず出す。来所だと確認画面は出ないので、どちらで打刻されたか分からないと困る。
+        el.textContent = res.kubun === "来所"
+          ? `${res.name}さん おはようございます（${res.time} 来所）`
+          : `${res.name}さん おつかれさまでした（${res.time} 退所）`;
+        // 退勤のときは当日サマリーを出して本人確認へ
+        if (res.kubun === "退所") {
+          if (res.summary && res.summary.status === "ok") {
+            if (res.summary.confirmMethod === "署名") {   // 署名の人は、紙に署名する。確認画面は出さない
+              el.textContent = `${res.name}さん おつかれさまでした（${res.time} 退所）`;
+              setTimeout(() => { el.className = ""; el.textContent = "QRカードをかざしてください"; busy = false; }, 3000);
+              return;
+            }
+            setTimeout(() => showConfirm(res.summary), 300);
+            return;
+          }
+          // 確認画面を出せない時は理由を出す。黙って出ないと原因が分からなくなるため。
+          el.className = "invalid";
+          el.textContent = `${res.name}さん ${res.time} 打刻しました　※` +
+            ((res.summary && res.summary.message) || "きょうの きろくが よみとれません") +
+            "（しょくいんを よんでください）";
+        }
+      } else if (res.status === "duplicate") {
+        // 通信エラーで確認画面が出なかった人が読み直したとき。まだ本人確認が済んでいなければ、
+        // 確認画面をもう一度出す。
+        if (res.kubun === "退所" && res.summary && res.summary.status === "ok" && res.summary.confirmMethod !== "署名") {
+          el.className = "ok";
+          el.textContent = `${res.name}さん おつかれさまでした（${res.time || ""} 退所）`;
+          setTimeout(() => showConfirm(res.summary), 300);
+          return;
+        }
+        el.className = "duplicate";
+        el.textContent = `${res.name}さん、${res.message}`;
+      } else {
+        el.className = "invalid";
+        el.textContent = res.message;
+      }
+      setTimeout(() => {
+        el.className = "";
+        el.textContent = "QRカードをかざしてください";
+        busy = false;
+      }, 3000);
+    }
+
+    // 確認画面用のひらがな表示（昼食・送迎）
+    function lunchKana(v) {
+      if (v === "ご飯あり") return "ごはん あり";
+      if (v === "おかずのみ") return "おかずだけ";
+      return "なし";
+    }
+    function sougeiKana(v) { return v === "あり" ? "あり" : "なし"; }
+
+    function showConfirm(s) {
+      try {
+        confirmUid = s.uid;
+        document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
+        // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
+        document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
+        document.getElementById("cLunch").textContent = "ひるごはん　" + lunchKana(s.lunch);
+        document.getElementById("cSougei").textContent = "おくりむかえ　いき " + sougeiKana(s.sougeiGo) + "　かえり " + sougeiKana(s.sougeiBack);
+        buildDetail(s);
+        document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
+        document.getElementById("staffCall").style.display = "none";
+        document.getElementById("staffEnter").style.display = "none";
+        document.getElementById("confirmBtns").style.display = "flex";
+        document.getElementById("confirmScreen").style.display = "flex";
+        updateMoreHint();   // 画面を出したあとでないと、入りきるかどうかが測れない
+      } catch (e) {
+        // 画面を作る途中で失敗すると、打刻だけ済んで何も出ない状態になる。理由を出す。
+        const el = document.getElementById("message");
+        el.className = "invalid";
+        el.textContent = "かくにん がめんを ひらけません（しょくいんを よんでください）: " + e.message;
+        busy = false;
+      }
+    }
+
+
+    // 「何時から何時まで／どの作業／工賃」を時間の順に並べる。合計だけ見せて確認させないため。
+    function buildDetail(s) {
+      const box = document.getElementById("cDetail");
+      box.innerHTML = "";
+      const list = s.timeline || [];
+      if (!list.length) {
+        // 古いGASのまま（timeline が無い）なら、作業ごとの内訳で出す
+        if ((s.breakdown || []).length) return buildDetailByTask(s, box);
+        const p = document.createElement("div");
+        p.className = "dTask";
+        p.textContent = "（さぎょうが まだ はいっていません）";
+        box.appendChild(p);
+        return;
+      }
+      // 作業と作業のあいだのすき間は「きゅうけい ○ふん」として出す（マスタの休憩時間帯など）。
+      // お昼（12:00〜13:00）は休憩に数えない。作業が続いている（有給休憩）ところは出ない。
+      const toMin = function (t) { const q = String(t).split(":"); return Number(q[0]) * 60 + Number(q[1]); };
+      const hm = function (m) { return Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2); };
+      const items = [];
+      list.forEach(function (w, i) {
+        items.push({ w: w });
+        const nx = list[i + 1];
+        if (!nx) return;
+        let a = toMin(w.to), b = toMin(nx.from);
+        const segs = [];
+        if (a < 720 && b > 780) { segs.push([a, 720]); segs.push([780, b]); }
+        else if (a >= 720 && a < 780) { if (b > 780) segs.push([780, b]); }
+        else if (b > 720 && b <= 780) { if (a < 720) segs.push([a, 720]); }
+        else if (!(a >= 720 && b <= 780)) { segs.push([a, b]); }
+        segs.forEach(function (g) { if (g[1] - g[0] > 0) items.push({ brk: g }); });
+      });
+      items.forEach(function (it) {
+        if (it.brk) {
+          const bm = it.brk[1] - it.brk[0];
+          const br = document.createElement("div");
+          br.className = "dRow";
+          const bh = document.createElement("div");
+          bh.className = "dHead";
+          const bt = document.createElement("div");
+          bt.className = "dTime";
+          bt.textContent = hm(it.brk[0]) + " 〜 " + hm(it.brk[1]);
+          bh.appendChild(bt);
+          const bl = document.createElement("div");
+          bl.className = "dLine";
+          const bn = document.createElement("div");
+          bn.className = "dTask";
+          bn.textContent = "きゅうけい";
+          const bam = document.createElement("div");
+          bam.className = "dAmount";
+          bam.textContent = bm + "ふん";
+          bl.appendChild(bn); bl.appendChild(bam);
+          br.appendChild(bh); br.appendChild(bl);
+          box.appendChild(br);
+          return;
+        }
+        const w = it.w;
+        const row = document.createElement("div");
+        row.className = "dRow";
+
+        // 時刻と単価は1行にまとめる。行が3段になると画面からはみ出すため。
+        const head = document.createElement("div");
+        head.className = "dHead";
+        const time = document.createElement("div");
+        time.className = "dTime";
+        time.textContent = w.from + " 〜 " + w.to;
+        const r = document.createElement("div");
+        r.className = "dRate";
+        r.textContent = Number(w.rate).toLocaleString() + "円／じかん";
+        head.appendChild(time); head.appendChild(r);
+
+        const line = document.createElement("div");
+        line.className = "dLine";
+        const t = document.createElement("div");
+        t.className = "dTask";
+        // 「完成品作業（バスマット・イレクターパイプ…）」のような長い名前は括弧の前まで。
+        // 括弧の中は作業マスタ上の説明なので、本人が見分けるのに要らない。
+        t.textContent = shortTaskName(w.task);
+        const a = document.createElement("div");
+        a.className = "dAmount";
+        a.textContent = Number(w.amount).toLocaleString() + "円";
+        line.appendChild(t); line.appendChild(a);
+
+        row.appendChild(head); row.appendChild(line);
+        box.appendChild(row);
+      });
+    }
+
+    // 旧表示（作業ごとに「単価 × 時間 = 小計」）。GASを差し替えるまでの保険。
+    function buildDetailByTask(s, box) {
+      s.breakdown.forEach(function (w) {
+        const row = document.createElement("div");
+        row.className = "dRow";
+        const t = document.createElement("div");
+        t.className = "dTask";
+        t.textContent = w.task;
+        const c = document.createElement("div");
+        c.className = "dCalc";
+        c.innerHTML = Number(w.rate).toLocaleString() + "円 × " + hhmm(w.minutes) +
+                      " = <span class=\"dAmount\">" + Number(w.amount).toLocaleString() + "円</span>";
+        row.appendChild(t); row.appendChild(c);
+        box.appendChild(row);
+      });
+    }
+
+    // 作業名の括弧書きを落とす。落としても空になるなら元のまま返す。
+    function shortTaskName(name) {
+      const s = String(name || "").split(/[（(]/)[0].trim();
+      return s || String(name || "");
+    }
+
+    // しごとの欄に続きがあるかを見て、案内を出し分ける
+    function updateMoreHint() {
+      const d = document.getElementById("cDetail");
+      const rest = d.scrollHeight - d.clientHeight - d.scrollTop;
+      document.getElementById("cMore").style.display = rest > 4 ? "block" : "none";
+    }
+    document.getElementById("cDetail").addEventListener("scroll", updateMoreHint);
+
+    // 95分 → 「1じかん35ふん」
+    function hhmm(min) {
+      const h = Math.floor(min / 60), m = min % 60;
+      if (h && m) return h + "じかん" + m + "ふん";
+      if (h) return h + "じかん";
+      return m + "ふん";
+    }
+
+    // ---- 後日のかくにん（押し忘れた日の振り返り）。職員メニューから入る。本人が押し、職員は見守る ----
+    let laterMode = false;
+    let laterDate = "";
+    let laterPerson = null;   // {uid, name}
+
+    function setConfirmLabels(later) {
+      document.getElementById("cSub").firstChild.textContent = later ? "その日の じかん　" : "きょうの じかん　";
+      document.querySelector("#cWorkRow .cLabel").textContent = later ? "その日の しごと" : "きょうの しごと";
+      document.querySelector("#cTotalRow .cLabel").textContent = later ? "その日の こうちん" : "きょうの こうちん";
+    }
+
+    function dateLabel(ds) {
+      const q = String(ds).split("/");
+      const d = new Date(Number(q[0]), Number(q[1]) - 1, Number(q[2]));
+      return Number(q[1]) + "/" + Number(q[2]) + "（" + "日月火水木金土".charAt(d.getDay()) + "）";
+    }
+
+    function hideConfirm() {
+      laterMode = false;
+      setConfirmLabels(false);
+      document.getElementById("confirmScreen").style.display = "none";
+      document.getElementById("message").className = "";
+      document.getElementById("message").textContent = "QRカードをかざしてください";
+      confirmUid = null;
+      busy = false;
+    }
+
+    function onConfirm() {
+      if (!confirmUid) return hideConfirm();
+      if (laterMode) return onConfirmLater();
+      document.getElementById("confirmBtns").style.display = "none";
+      // 通信に数秒かかる。押した手応えが無いと何度も押されてしまう。
+      document.getElementById("confirmName").textContent = "きろく しています…";
+      callApi({ uid: confirmUid, action: "confirm" }, () => {
+        document.getElementById("confirmName").textContent = "きろくしました ありがとうございました ✓";
+        setTimeout(hideConfirm, 2000);
+      }, () => {
+        document.getElementById("staffCall").textContent = "つうしんエラー しょくいんを よんでください";
+        document.getElementById("staffCall").style.display = "block";
+        setTimeout(hideConfirm, 6000);
+      });
+    }
+
+    function onDiffer() {
+      if (laterMode) return backToLater("ちがうときは、紙に署名をもらってください。内容は、あとで職員が直します。");
+      document.getElementById("confirmBtns").style.display = "none";
+      document.getElementById("staffCall").style.display = "block";
+      document.getElementById("staffEnter").style.display = "block";
+    }
+
+    // 後日のかくにん: 本人が押した実際の日時が記録される（さかのぼらない）。押すまでは、確認のない日として残る。
+    function openLater() {
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("laterBox").style.display = "block";
+      showLaterPeople();
+    }
+
+    function laterMsg(t) { document.getElementById("staffMsg").textContent = t || ""; }
+
+    function showLaterPeople() {
+      laterPerson = null;
+      document.getElementById("laterLabel").textContent = "かくにんが まだの方（押し忘れ）";
+      document.getElementById("laterBack").onclick = function () { backToMenu(); };
+      const box = document.getElementById("laterList");
+      box.innerHTML = "<div class='aNone'>よみこみ中...</div>";
+      callApi(withPin({ action: "laterPeople" }), (res) => {
+        box.innerHTML = "";
+        if (res.status !== "ok") { box.innerHTML = "<div class='aNone'>" + (res.message || "よみこめませんでした") + "</div>"; return; }
+        if (!(res.list || []).length) { box.innerHTML = "<div class='aNone'>かくにんが まだの日は ありません</div>"; return; }
+        res.list.forEach(function (p) {
+          box.appendChild(laterButton(p.name, p.count + "日", function () { showLaterDays(p); }));
+        });
+      }, () => { box.innerHTML = "<div class='aNone'>通信エラー</div>"; });
+    }
+
+    function laterButton(left, right, onclick) {
+      const b = document.createElement("button");
+      b.className = "pickName";
+      b.onclick = onclick;
+      const n = document.createElement("span");
+      n.className = "pickNameText";
+      n.textContent = left;
+      const i = document.createElement("span");
+      i.className = "pickNameInfo";
+      i.textContent = right;
+      b.appendChild(n); b.appendChild(i);
+      return b;
+    }
+
+    function showLaterDays(p) {
+      laterPerson = p;
+      document.getElementById("laterLabel").textContent = p.name + " さん　かくにんが まだの日";
+      document.getElementById("laterBack").onclick = function () { showLaterPeople(); };
+      const box = document.getElementById("laterList");
+      box.innerHTML = "<div class='aNone'>よみこみ中...</div>";
+      callApi(withPin({ action: "laterDays", uid: p.uid }), (res) => {
+        box.innerHTML = "";
+        if (res.status !== "ok") { box.innerHTML = "<div class='aNone'>" + (res.message || "よみこめませんでした") + "</div>"; return; }
+        if (!(res.list || []).length) { box.innerHTML = "<div class='aNone'>かくにんが まだの日は ありません</div>"; return; }
+        res.list.forEach(function (d) {
+          box.appendChild(laterButton(dateLabel(d.date), d.noOut ? "退所の打刻なし" : (d.planIn || "") + "-" + (d.planOut || ""),
+            function () {
+              if (d.noOut) { laterMsg("退所の打刻が ありません。先に打刻を直してください（スプレッドシート）。"); return; }
+              openLaterConfirm(p, d.date);
+            }));
+        });
+      }, () => { box.innerHTML = "<div class='aNone'>通信エラー</div>"; });
+    }
+
+    function openLaterConfirm(p, date) {
+      laterMsg("よみこみ中...");
+      callApi(withPin({ action: "laterSummary", uid: p.uid, date: date }), (s) => {
+        if (s.status !== "ok") { laterMsg(s.message || "よみこめませんでした"); return; }
+        laterMsg("");
+        laterMode = true;
+        laterDate = date;
+        confirmUid = p.uid;
+        document.getElementById("staffScreen").style.display = "none";   // 職員モードの画面は、いったん隠す（本人の確認画面を出す）
+        setConfirmLabels(true);
+        showConfirm(s);
+        document.getElementById("confirmName").textContent = p.name + "さん " + dateLabel(date) + " の ぶん";
+      }, () => laterMsg("通信エラー"));
+    }
+
+    function onConfirmLater() {
+      document.getElementById("confirmBtns").style.display = "none";
+      document.getElementById("confirmName").textContent = "きろく しています…";
+      callApi(withPin({ action: "confirmLater", uid: confirmUid, date: laterDate }), (res) => {
+        if (res.status !== "ok") {
+          backToLater(res.message || "きろくできませんでした");
+          return;
+        }
+        document.getElementById("confirmName").textContent = "きろくしました ありがとうございました ✓";
+        setTimeout(function () { backToLater("かくにんを きろくしました（" + dateLabel(laterDate) + "）"); }, 1800);
+      }, () => {
+        document.getElementById("staffCall").textContent = "つうしんエラー しょくいんを よんでください";
+        document.getElementById("staffCall").style.display = "block";
+        setTimeout(function () { backToLater("通信エラー。もういちど ためしてください"); }, 4000);
+      });
+    }
+
+    // 本人の確認画面から、職員モードの「かくにんが まだの日」に戻る
+    function backToLater(msg) {
+      laterMode = false;
+      setConfirmLabels(false);
+      document.getElementById("confirmScreen").style.display = "none";
+      document.getElementById("staffCall").style.display = "none";
+      document.getElementById("staffEnter").style.display = "none";
+      document.getElementById("confirmBtns").style.display = "flex";
+      confirmUid = null;
+      document.getElementById("staffScreen").style.display = "flex";
+      document.getElementById("pinBox").style.display = "none";
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("laterBox").style.display = "block";
+      if (laterPerson) showLaterDays(laterPerson); else showLaterPeople();
+      laterMsg(msg || "");
+    }
+
+    // ---- 職員モード ----
+    let staffName = null;
+    let staffSummary = null;
+    let taskList = [];
+    let taskObjs = [];   // [{name, rate}]。作業の選択欄を、単価ごとのグループに分けて出すために使う
+
+    // 作業の選択欄に、単価ごと（350円、375円…）のグループに分けて作業名を入れる。
+    // 作業が増えても、縦に長く並ぶだけにならず、探しやすい。
+    function fillTaskOptions(sel) {
+      const groups = {};
+      const rates = [];
+      taskObjs.forEach(function (x) {
+        const k = Number(x.rate) || 0;
+        if (!groups[k]) { groups[k] = []; rates.push(k); }
+        groups[k].push(x.name);
+      });
+      rates.sort(function (a, b) { return a - b; });
+      rates.forEach(function (k) {
+        const g = document.createElement("optgroup");
+        g.label = "【" + k + "円／時間】";
+        groups[k].forEach(function (name) {
+          const op = document.createElement("option");
+          op.value = name; op.textContent = name;
+          g.appendChild(op);
+        });
+        sel.appendChild(g);
+      });
+    }
+
+    // 退勤時の確認画面から入る（対象者は確定済み）
+    function openStaff() {
+      staffPickMode = false;
+      showStaffScreen();
+    }
+
+    // メイン画面から入る（日中の修正。対象者をこれから選ぶ）
+    function openStaffPick() {
+      staffPickMode = true;
+      confirmUid = null;
+      showStaffScreen();
+    }
+
+    function showStaffScreen() {
+      document.getElementById("staffScreen").style.display = "flex";
+      document.getElementById("pinBox").style.display = "block";
+      document.getElementById("pickBox").style.display = "none";
+      document.getElementById("editBox").style.display = "none";
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("listBox").style.display = "none";
+      document.getElementById("laterBox").style.display = "none";
+      document.getElementById("staffTitle").textContent = "職員モード";
+      document.getElementById("staffMsg").textContent = "";
+      document.getElementById("staffWho").textContent = "";
+      document.getElementById("pinInput").value = "";
+      document.getElementById("pickId").value = "";
+      staffName = null;
+    }
+
+
+    // ---- 職員メニュー ----
+    function backToMenu() {
+      document.getElementById("laterBox").style.display = "none";
+      document.getElementById("listBox").style.display = "none";
+      document.getElementById("pickBox").style.display = "none";
+      document.getElementById("editBox").style.display = "none";
+      document.getElementById("menuBox").style.display = "block";
+      document.getElementById("staffMsg").textContent = "";
+      confirmUid = null;
+    }
+
+    function showPick() {
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("pickBox").style.display = "block";
+      buildPickList();
+    }
+
+    // 職員モードの画面はカメラを覆ってしまい、QRをかざす向きが分からない。
+    // 本日の予定者を名前で並べて、押すだけで開けるようにする。
+    function buildPickList() {
+      const box = document.getElementById("pickList");
+      if (dayList.length) return renderPickList();
+      box.innerHTML = "<div class='aNone'>よみこみ中...</div>";
+      callApi({ action: "dayList" }, (res) => {
+        if (res.status !== "ok") {
+          box.innerHTML = "<div class='aNone'>" + (res.message || "よみこめませんでした") + "</div>";
+          return;
+        }
+        dayList = res.list || [];
+        renderPickList();
+      }, () => { box.innerHTML = "<div class='aNone'>通信エラー（IDを入力するか、QRをかざしてください）</div>"; });
+    }
+
+    function renderPickList() {
+      const box = document.getElementById("pickList");
+      box.innerHTML = "";
+      dayList.forEach(function (p) {
+        const b = document.createElement("button");
+        b.className = "pickName";
+        b.onclick = function () { pickTarget(p.uid); };
+        const n = document.createElement("span");
+        n.className = "pickNameText";
+        n.textContent = p.name;
+        const s = document.createElement("span");
+        s.className = "pickNameInfo";
+        s.textContent = (p.attend === false ? "欠席" : (p.planIn || "") + "-" + (p.planOut || "")) +
+                        (p.confirmed ? " ✓確認済" : "");
+        b.appendChild(n); b.appendChild(s);
+        box.appendChild(b);
+      });
+    }
+
+    // ---- 本日の出席一覧 ----
+    let dayList = [];
+
+    function openAttendList() {
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("staffMsg").style.color = "#555";
+      document.getElementById("staffMsg").textContent = "読み込み中...";
+      callApi({ action: "dayList" }, (res) => {
+        if (res.status !== "ok") {
+          document.getElementById("staffMsg").style.color = "#B71C1C";
+          document.getElementById("staffMsg").textContent = res.message || "読み込めませんでした";
+          document.getElementById("menuBox").style.display = "block";
+          return;
+        }
+        dayList = res.list || [];
+        document.getElementById("staffMsg").textContent = "";
+        document.getElementById("listLabel").textContent = res.date + " の出席（" + dayList.length + "名）";
+        buildAttendList();
+        document.getElementById("listBox").style.display = "block";
+      }, () => {
+        document.getElementById("staffMsg").style.color = "#B71C1C";
+        document.getElementById("staffMsg").textContent = "通信エラー";
+        document.getElementById("menuBox").style.display = "block";
+      });
+    }
+
+    function buildAttendList() {
+      const box = document.getElementById("attendList");
+      box.innerHTML = "";
+      dayList.forEach(function (p, i) {
+        const row = document.createElement("div");
+        row.className = "aRow";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = p.attend;
+        cb.id = "att_" + i;
+
+        const wrap = document.createElement("div");
+        wrap.style.flex = "1";
+        const nm = document.createElement("div");
+        nm.className = "aName";
+        nm.textContent = p.name;
+        const info = document.createElement("div");
+        info.className = "aInfo";
+        info.textContent = p.planIn + "〜" + p.planOut + "　昼食:" + (p.lunch || "なし");
+        const st = document.createElement("div");
+        // QRで打刻済みかどうかが分かるようにする
+        if (p.punchedOut) { st.className = "aPunch"; st.textContent = "✓ 退勤ずみ"; }
+        else if (p.punchedIn) { st.className = "aPunch"; st.textContent = "✓ 出勤ずみ"; }
+        else { st.className = "aNone"; st.textContent = "打刻なし"; }
+        wrap.appendChild(nm); wrap.appendChild(info); wrap.appendChild(st);
+
+        row.appendChild(cb); row.appendChild(wrap);
+        box.appendChild(row);
+      });
+    }
+
+    function saveAttendance() {
+      const ids = [];
+      dayList.forEach(function (p, i) {
+        const cb = document.getElementById("att_" + i);
+        if (cb && cb.checked) ids.push(p.uid);
+      });
+      document.getElementById("staffMsg").style.color = "#555";
+      document.getElementById("staffMsg").textContent = "登録中...";
+      callApi(withPin({ action: "setAttendance", uids: ids.join(",") }), (res) => {
+        const msg = document.getElementById("staffMsg");
+        if (res.status === "ok") {
+          msg.style.color = "#1B5E20";
+          msg.textContent = "登録しました（" + res.changed + "名を変更）";
+          openAttendList();
+        } else {
+          msg.style.color = "#B71C1C";
+          msg.textContent = res.message || "登録できませんでした";
+        }
+      }, () => {
+        document.getElementById("staffMsg").style.color = "#B71C1C";
+        document.getElementById("staffMsg").textContent = "通信エラー";
+      });
+    }
+
+    // 対象者を選ぶ（QRをかざす／IDを入力）
+    function pickTarget(uid) {
+      const id = (uid || document.getElementById("pickId").value || "").trim();
+      if (!id) return;
+      confirmUid = id;
+      document.getElementById("pickBox").style.display = "none";
+      document.getElementById("staffMsg").textContent = "読み込み中...";
+      loadEditor();
+    }
+
+    function closeStaff() {
+      document.getElementById("staffScreen").style.display = "none";
+      staffName = null;
+      if (staffPickMode) {      // 日中の修正。本人確認は退勤時に行う
+        staffPickMode = false;
+        confirmUid = null;
+        hideConfirm();
+        return;
+      }
+      // 退勤時の修正。直した内容で本人の確認画面に戻す
+      if (confirmUid) {
+        callApi({ uid: confirmUid, action: "summary" }, (s) => {
+          if (s.status === "ok") showConfirm(s); else hideConfirm();
+        }, hideConfirm);
+      } else {
+        hideConfirm();
+      }
+    }
+
+    function doStaffAuth() {
+      const pin = document.getElementById("pinInput").value.trim();
+      if (!pin) return;
+      document.getElementById("staffMsg").textContent = "確認中...";
+      callApi({ action: "staffAuth", pin: pin }, (res) => {
+        if (res.status !== "ok") {
+          document.getElementById("staffMsg").textContent = res.message || "暗証番号が違います";
+          return;
+        }
+        staffName = res.staff;
+        document.getElementById("staffMsg").textContent = "";
+        document.getElementById("staffWho").textContent = staffName + " さんとして修正します";
+        document.getElementById("pinBox").style.display = "none";
+        if (staffPickMode && !confirmUid) {
+          document.getElementById("menuBox").style.display = "block";
+          withTaskList(function () {}, function () {});   // 職員が選んでいる間に先読みしておく
+          return;
+        }
+        loadEditor();
+      }, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    // 作業マスタはめったに変わらないのに、記録を直すたびに取りに行っていて遅かった。
+    // 端末に1日ぶん覚えさせて、2回目からは通信を省く。
+    const TASK_CACHE_KEY = "smile_tasklist_v2";
+    const TASK_CACHE_MS = 24 * 60 * 60 * 1000;
+
+    function readTaskCache() {
+      try {
+        const o = JSON.parse(localStorage.getItem(TASK_CACHE_KEY) || "null");
+        if (!o || !o.at || Date.now() - o.at > TASK_CACHE_MS) return null;
+        return o.data;
+      } catch (e) { return null; }   // 使えない端末でも動くようにする
+    }
+
+    function withTaskList(onOk, onErr) {
+      const cached = readTaskCache();
+      if (cached) return onOk(cached);
+      callApi({ action: "taskList" }, (t) => {
+        try { localStorage.setItem(TASK_CACHE_KEY, JSON.stringify({ at: Date.now(), data: t })); } catch (e) {}
+        onOk(t);
+      }, onErr);
+    }
+
+    function loadEditor() {
+      withTaskList((t) => {
+        taskObjs = t.tasks || [];
+        taskList = taskObjs.map(x => x.name);
+        const lunchSel = document.getElementById("editLunch");
+        lunchSel.innerHTML = "";
+        (t.lunchOptions || []).forEach(o => {
+          const op = document.createElement("option");
+          op.value = o; op.textContent = o; lunchSel.appendChild(op);
+        });
+        callApi({ uid: confirmUid, action: "summary" }, (s) => {
+          if (s.status !== "ok") {
+            // IDの打ち間違いや、本日の予定が無い場合
+            document.getElementById("staffMsg").textContent = s.message || "この方の本日の記録が見つかりません";
+            document.getElementById("editBox").style.display = "none";
+            if (staffPickMode) {
+              confirmUid = null;
+              document.getElementById("pickBox").style.display = "block";
+            }
+            return;
+          }
+          staffSummary = s;
+          document.getElementById("staffTitle").textContent = s.name + " さんの記録を修正";
+          // 編集対象は予定時刻。実際の打刻時刻は参考として下に表示する。
+          document.getElementById("editIn").value = s.planIn || "";
+          document.getElementById("editOut").value = s.planOut || "";
+          document.getElementById("punchNote").textContent =
+            "実際の打刻： 出勤 " + (s.actualIn || "なし") + " ／ 退勤 " + (s.actualOut || "なし");
+          lunchSel.value = s.lunch || "なし";
+          document.getElementById("editGo").value = s.sougeiGo || "なし";
+          document.getElementById("editBack").value = s.sougeiBack || "なし";
+          buildSlotList(s);
+          document.getElementById("editBox").style.display = "block";
+        }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
+      }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
+    }
+
+    function buildSlotList(s) {
+      const box = document.getElementById("slotList");
+      box.innerHTML = "";
+      (s.slots || []).forEach((label, i) => {
+        const info = (s.slotRanges && s.slotRanges[i]) || {};
+        if (!info.available) return;   // 通所時間外の枠は出さない
+
+        const wrap = document.createElement("div");
+        wrap.className = info.warn ? "slotBox slotWarn" : "slotBox";
+
+        const head = document.createElement("div");
+        head.className = "slotHead";
+        head.textContent = info.warn ? "⚠ " + label + "（作業が未選択）" : label;
+        wrap.appendChild(head);
+
+        // 作業内容
+        const sel = document.createElement("select");
+        const blank = document.createElement("option");
+        blank.value = ""; blank.textContent = "（作業なし）";
+        sel.appendChild(blank);
+        fillTaskOptions(sel);
+        sel.value = (s.slotTasks && s.slotTasks[i]) || "";
+        sel.onchange = () => saveWork(i, sel.value, "1");
+        wrap.appendChild(sel);
+
+        // 実際に作業した時間（途中で抜けた場合だけ入力）
+        const line = document.createElement("div");
+        line.className = "slotRow";
+        const lab = document.createElement("span");
+        lab.textContent = "実際の時間";
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.placeholder = info.defaultRange || "";
+        inp.value = info.real || "";
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.textContent = "保存";
+        btn.onclick = () => saveSlotTime(i, inp.value.trim());
+        const clr = document.createElement("button");
+        clr.className = "btn btnGray";
+        clr.textContent = "戻す";
+        clr.onclick = () => { inp.value = ""; saveSlotTime(i, ""); };
+        line.appendChild(lab); line.appendChild(inp); line.appendChild(btn); line.appendChild(clr);
+        wrap.appendChild(line);
+
+        // 2つ目の作業（作業①に実時間を入れると、その枠の残り時間を担当する）
+        if (info.rest) {
+          const lab2 = document.createElement("div");
+          lab2.className = "restLabel";
+          lab2.textContent = "残り " + info.rest + " の作業";
+          const sel2 = document.createElement("select");
+          const b2 = document.createElement("option");
+          b2.value = ""; b2.textContent = "（作業なし）";
+          sel2.appendChild(b2);
+          fillTaskOptions(sel2);
+          sel2.value = (s.slotTasks2 && s.slotTasks2[i]) || "";
+          sel2.onchange = () => saveWork(i, sel2.value, "2");
+          wrap.appendChild(lab2);
+          wrap.appendChild(sel2);
+        }
+
+        box.appendChild(wrap);
+      });
+    }
+
+    function saveSlotTime(slotIndex, range) {
+      callApi(withPin({ uid: confirmUid, action: "updateSlotTime", slot: slotIndex, range: range }),
+        (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    function withPin(params) {
+      params.pin = document.getElementById("pinInput").value.trim();
+      return params;
+    }
+
+    function afterSave(res) {
+      const msg = document.getElementById("staffMsg");
+      if (res.status === "ok") {
+        staffSummary = res;
+        let text = "保存しました（" + res.minutes + "分 / " + Number(res.wage || 0).toLocaleString() + "円）";
+        // 時間だけ入れて作業を選び忘れると0分になってしまうため、気づけるようにする
+        if (res.warnSlots && res.warnSlots.length) {
+          text += "　⚠ " + res.warnSlots.join("、") + " は時間が入っていますが作業が未選択です（0分になります）";
+          msg.style.color = "#B71C1C";
+        } else {
+          msg.style.color = "#1B5E20";
+        }
+        msg.textContent = text;
+      } else {
+        msg.style.color = "#B71C1C";
+        msg.textContent = res.message || "保存できませんでした";
+      }
+    }
+
+    function saveTime(which) {
+      const v = document.getElementById(which === "in" ? "editIn" : "editOut").value;
+      if (!v) return;
+      callApi(withPin({ uid: confirmUid, action: "updateTime", which: which, time: v }), afterSave,
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    function saveLunch() {
+      callApi(withPin({ uid: confirmUid, action: "updateLunch", lunch: document.getElementById("editLunch").value }),
+        afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    function saveSougei() {
+      callApi(withPin({ uid: confirmUid, action: "updateSougei", go: document.getElementById("editGo").value,
+        back: document.getElementById("editBack").value }),
+        afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    function saveWork(slotIndex, task, which) {
+      callApi(withPin({ uid: confirmUid, action: "updateWork", slot: slotIndex, task: task, which: which || "1" }),
+        (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
+        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    }
+
+    function onScanError() {
+      // 打刻はサーバー側で先に済んでいることがある。すぐ読み直すと「連続読み取り」で弾かれるため、
+      // 「もう一度」ではなく職員に知らせる案内にする。
+      const el = document.getElementById("message");
+      el.className = "invalid";
+      el.textContent = "つうしんエラー。うちこくは きろくされて いるかも しれません（しょくいんを よんでください）";
+      busy = false;
+    }
+
+    function showManual() {
+      document.getElementById("manualBox").style.display = "block";
+    }
+
+    function submitManual() {
+      const uid = document.getElementById("manualId").value.trim();
+      if (!uid) return;
+      callApi({ uid: uid }, (res) => {
+        onScanResult(res);
+        document.getElementById("manualBox").style.display = "none";
+        document.getElementById("manualId").value = "";
+      }, onScanError);
+    }
+
+    const html5QrCode = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then((cameras) => {
+      const cameraId = cameras.length > 0 ? cameras[cameras.length - 1].id : null;
+      if (!cameraId) {
+        document.getElementById("message").textContent = "カメラが見つかりません。手入力をご利用ください";
+        return;
+      }
+      html5QrCode.start(cameraId, { fps: 10, qrbox: 250 }, onScanSuccess);
+    }).catch(() => {
+      document.getElementById("message").textContent = "カメラの起動に失敗しました。手入力をご利用ください";
+    });
+
+    // ---- 起動時の準備（ここは他の定数がすべて出そろってから実行する） ----
+    // 開いた時点でサーバーを温め、作業マスタも先に取っておく。
+    // こうしないと、朝いちばんの打刻や職員モードで20秒ほど待たされる。
+    warmUp();
+    withTaskList(function () {}, function () {});
+    setInterval(warmUp, WARMUP_MS);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") warmUp();
+    });
+  </script>
+</body>
+</html>
