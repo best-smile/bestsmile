@@ -157,11 +157,13 @@
     #staffScreen {
       display: none; position: fixed; inset: 0; background: #FAFAFA; z-index: 20;
       flex-direction: column; align-items: center; padding: 4vw; box-sizing: border-box;
-      overflow-y: auto;
+      overflow-y: auto; overflow-x: hidden; touch-action: pan-y;
+      padding-bottom: 30vw;   /* 下のお知らせ帯に、最後のボタンが隠れないように */
     }
     #staffScreen h2 { font-size: 5vw; margin: 2vw 0; }
+    /* 幅を「画面の幅＋余白」にしていたため、画面より広くなり横に動いていた。枠の中に余白を含める */
     #staffScreen .box {
-      width: 94vw; max-width: 640px; background: #fff; border: 1px solid #ddd;
+      width: 100%; max-width: 640px; box-sizing: border-box; background: #fff; border: 1px solid #ddd;
       border-radius: 10px; padding: 3vw; margin-bottom: 3vw;
     }
     #staffScreen label { font-size: 3.6vw; color: #555; display: block; margin-bottom: 1vw; }
@@ -177,7 +179,42 @@
     }
     #staffScreen .btnGray { background: #777; }
     .slotRow { display: flex; gap: 2vw; align-items: center; margin-bottom: 2vw; }
-    .slotRow span { font-size: 3.4vw; width: 26vw; flex-shrink: 0; }
+    .slotRow span { font-size: 3.4vw; flex-shrink: 0; white-space: nowrap; }
+    /* 入力欄は残りの幅だけ使う（はみ出して横に動くのを防ぐ） */
+    #staffScreen .slotRow input, #staffScreen .slotRow select { flex: 1 1 0; min-width: 0; width: auto; }
+    #staffScreen .slotRow .btn { flex-shrink: 0; white-space: nowrap; margin-top: 0; }
+    /* 時間帯ごとの「実際の時間」: ボタンを小さめにして、入力欄を広く */
+    #staffScreen .slotBox .btn { font-size: min(3.8vw, 24px); padding: min(2.2vw, 14px) min(3vw, 18px); }
+    #staffScreen .slotBox .slotRow span { font-size: min(3.4vw, 20px); }
+    #staffScreen .slotBox .slotRow input { font-size: min(4.2vw, 28px); }
+    .tLab { font-size: 4.4vw !important; font-weight: bold; color: #333; min-width: 13vw; }
+    /* 昼食・送迎: 押すだけで保存するボタン */
+    .choice { display: flex; gap: 2vw; flex: 1 1 auto; min-width: 0; }
+    .cBtn { flex: 1 1 0; min-width: 0; font-size: min(3.9vw, 30px); padding: 3vw 0.5vw; border: 2px solid #BDBDBD;
+            border-radius: 10px; background: #fff; color: #666; font-weight: bold; white-space: nowrap; }
+    .cBtn.on { background: #2E7D32; border-color: #2E7D32; color: #fff; }
+    .cBtn.on::before { content: "✓ "; }
+    .choiceRow { display: flex; align-items: center; gap: 2vw; margin-bottom: 2vw; }
+    .hint { font-size: 3.2vw; color: #777; font-weight: normal; }
+    /* 保存中・保存できた の見た目 */
+    #staffScreen .btn.saving, .cBtn.saving { background: #9E9E9E !important; border-color: #9E9E9E !important; color: #fff !important; }
+    .savedOk { animation: savedOk 2.2s ease-out; }
+    @keyframes savedOk { 0% { box-shadow: 0 0 0 6px #66BB6A; background-color: #C8E6C9; } 100% { box-shadow: 0 0 0 0 transparent; } }
+    /* 今日の合計（上にずっと出す） */
+    #staffSum { position: sticky; top: 0; z-index: 5; margin: -3vw -3vw 3vw; padding: 2.5vw 3vw;
+                background: #E8F5E9; border-bottom: 2px solid #2E7D32; border-radius: 10px 10px 0 0;
+                font-size: min(4vw, 31px); font-weight: bold; color: #1B5E20; text-align: center; white-space: nowrap; }
+    #staffSum.changed { animation: sumFlash 2.5s ease-out; }
+    @keyframes sumFlash { 0% { background: #FFF59D; } 100% { background: #E8F5E9; } }
+    /* 下に出るお知らせ帯（どこまでスクロールしていても見える） */
+    #saveToast { display: none; position: fixed; left: 4vw; right: 4vw; bottom: 4vw; z-index: 40;
+                 padding: 4vw; border-radius: 14px; font-size: 4.6vw; font-weight: bold; line-height: 1.4;
+                 text-align: center; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+    #saveToast.busy { background: #1F4E79; }
+    #saveToast.ok { background: #2E7D32; }
+    #saveToast.warn { background: #E65100; }
+    #saveToast.err { background: #B71C1C; }
+    #saveToast small { display: block; font-size: 3.6vw; font-weight: normal; margin-top: 1vw; }
     .slotBox { border: 1px solid #e0e0e0; border-radius: 8px; padding: 2vw; margin-bottom: 2.5vw; background: #FCFCFC; }
     .slotHead { font-size: 4vw; font-weight: bold; color: #1F4E79; margin-bottom: 1.5vw; }
     .slotWarn { border: 2px solid #B71C1C; background: #FFF3F3; }
@@ -293,29 +330,27 @@
     </div>
 
     <div class="box" id="editBox" style="display:none">
-      <label>出勤・退勤時刻</label>
+      <div id="staffSum"></div>
+      <label>出勤・退勤時刻 <span class="hint">（早退・遅刻。時刻を選んで「保存」）</span></label>
       <div class="slotRow">
-        <span>出勤</span><input id="editIn" type="time">
-        <button class="btn" onclick="saveTime('in')">保存</button>
+        <span class="tLab">出勤</span><input id="editIn" type="time">
+        <button class="btn" onclick="saveTime('in', this)">保存</button>
       </div>
       <div class="slotRow">
-        <span>退勤</span><input id="editOut" type="time">
-        <button class="btn" onclick="saveTime('out')">保存</button>
+        <span class="tLab">退勤</span><input id="editOut" type="time">
+        <button class="btn" onclick="saveTime('out', this)">保存</button>
       </div>
       <div id="punchNote" style="font-size:3.2vw;color:#777;margin-top:1vw"></div>
 
-      <label style="margin-top:3vw">昼食</label>
-      <div class="slotRow">
-        <select id="editLunch"></select>
-        <button class="btn" onclick="saveLunch()">保存</button>
-      </div>
+      <label style="margin-top:4vw">昼食 <span class="hint">（押すと、すぐ保存）</span></label>
+      <select id="editLunch" style="display:none"></select>
+      <div class="choice" id="chLunch"></div>
 
-      <label style="margin-top:3vw">送迎（往・復）</label>
-      <div class="slotRow">
-        <span>往</span><select id="editGo"><option>あり</option><option>なし</option></select>
-        <span>復</span><select id="editBack"><option>あり</option><option>なし</option></select>
-        <button class="btn" onclick="saveSougei()">保存</button>
-      </div>
+      <label style="margin-top:4vw">送迎 <span class="hint">（押すと、すぐ保存）</span></label>
+      <select id="editGo" style="display:none"><option>あり</option><option>なし</option></select>
+      <select id="editBack" style="display:none"><option>あり</option><option>なし</option></select>
+      <div class="choiceRow"><span class="tLab">行き</span><div class="choice" id="chGo"></div></div>
+      <div class="choiceRow"><span class="tLab">帰り</span><div class="choice" id="chBack"></div></div>
 
       <label style="margin-top:3vw">作業内容（時間帯ごと）</label>
       <div id="slotList"></div>
@@ -323,6 +358,7 @@
       <button class="btn btnGray" onclick="closeStaff()">修正を終えて戻る</button>
     </div>
   </div>
+  <div id="saveToast" onclick="if (!this.classList.contains('busy')) this.style.display='none'"></div>
 
   <script>
     const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxGco3wFCYoJ6g4qRAq2e_NkNOh07hrFtgzkvJH9KTtAWmqpngBSCHKYmZDzL9ZHGFw/exec";
@@ -333,7 +369,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-11-09f 画面改良 試験用";
+    const APP_VERSION = "v2026-11-10a 画面改良 試験用";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -1073,6 +1109,9 @@
     }
 
     function closeStaff() {
+      if (typeof pendingSaves !== "undefined" && pendingSaves > 0 &&
+          !confirm("まだ保存中です。保存が終わってから閉じるほうが安全です。それでも閉じますか？")) return;
+      document.getElementById("saveToast").style.display = "none";
       document.getElementById("staffScreen").style.display = "none";
       staffName = null;
       if (staffPickMode) {      // 日中の修正。本人確認は退勤時に行う
@@ -1167,6 +1206,8 @@
           document.getElementById("editGo").value = s.sougeiGo || "なし";
           document.getElementById("editBack").value = s.sougeiBack || "なし";
           buildSlotList(s);
+          renderChoices();
+          showStaffSum(s, false);
           document.getElementById("editBox").style.display = "block";
         }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
       }, () => { document.getElementById("staffMsg").textContent = "読み込みエラー"; });
@@ -1181,6 +1222,7 @@
 
         const wrap = document.createElement("div");
         wrap.className = info.warn ? "slotBox slotWarn" : "slotBox";
+        wrap.dataset.slot = i;
 
         const head = document.createElement("div");
         head.className = "slotHead";
@@ -1194,7 +1236,7 @@
         sel.appendChild(blank);
         fillTaskOptions(sel);
         sel.value = (s.slotTasks && s.slotTasks[i]) || "";
-        sel.onchange = () => saveWork(i, sel.value, "1");
+        sel.onchange = () => saveWork(i, sel.value, "1", sel);
         wrap.appendChild(sel);
 
         // 実際に作業した時間（途中で抜けた場合だけ入力）
@@ -1209,11 +1251,11 @@
         const btn = document.createElement("button");
         btn.className = "btn";
         btn.textContent = "保存";
-        btn.onclick = () => saveSlotTime(i, inp.value.trim());
+        btn.onclick = () => saveSlotTime(i, inp.value.trim(), btn);
         const clr = document.createElement("button");
         clr.className = "btn btnGray";
         clr.textContent = "戻す";
-        clr.onclick = () => { inp.value = ""; saveSlotTime(i, ""); };
+        clr.onclick = () => { inp.value = ""; saveSlotTime(i, "", clr); };
         line.appendChild(lab); line.appendChild(inp); line.appendChild(btn); line.appendChild(clr);
         wrap.appendChild(line);
 
@@ -1228,7 +1270,7 @@
           sel2.appendChild(b2);
           fillTaskOptions(sel2);
           sel2.value = (s.slotTasks2 && s.slotTasks2[i]) || "";
-          sel2.onchange = () => saveWork(i, sel2.value, "2");
+          sel2.onchange = () => saveWork(i, sel2.value, "2", sel2);
           wrap.appendChild(lab2);
           wrap.appendChild(sel2);
         }
@@ -1237,10 +1279,102 @@
       });
     }
 
-    function saveSlotTime(slotIndex, range) {
+    // ---- 保存したことが分かるようにする（2026-11-10） ----
+    // 押したボタンは「保存中…」になり、画面の下に帯で「直しています → 直しました」を出す。
+    // 上の「今日の合計」も、保存のたびに新しい数字になって黄色く光る。
+    let pendingSaves = 0;
+    let toastTimer = null;
+    function showToast(kind, html, ms) {
+      const t = document.getElementById("saveToast");
+      clearTimeout(toastTimer);
+      t.className = kind; t.innerHTML = html; t.style.display = "block";
+      if (ms) toastTimer = setTimeout(function () { t.style.display = "none"; }, ms);
+    }
+    function fmtMin(m) {
+      m = Number(m || 0);
+      return Math.floor(m / 60) + "時間" + ("0" + (m % 60)).slice(-2) + "分";
+    }
+    function showStaffSum(res, changed) {
+      const el = document.getElementById("staffSum");
+      el.textContent = "今日の合計　" + fmtMin(res.minutes) + "・" + Number(res.wage || 0).toLocaleString() + "円";
+      if (changed) { el.classList.remove("changed"); void el.offsetWidth; el.classList.add("changed"); }
+    }
+    function flash(el) {
+      if (!el) return;
+      el.classList.remove("savedOk"); void el.offsetWidth; el.classList.add("savedOk");
+    }
+    function startSave(el, what) {
+      pendingSaves++;
+      if (el) {
+        el.disabled = true; el.classList.add("saving");
+        if (el.tagName === "BUTTON") { el.dataset.label = el.dataset.label || el.textContent; el.textContent = "保存中…"; }
+      }
+      showToast("busy", "⏳ " + escHtml(what) + " 直しています…<small>数秒かかります。そのままお待ちください</small>", 0);
+      return function done(res) {
+        pendingSaves--;
+        if (el) {
+          el.disabled = false; el.classList.remove("saving");
+          if (el.tagName === "BUTTON" && el.dataset.label) el.textContent = el.dataset.label;
+        }
+        if (!res) {
+          document.getElementById("staffMsg").textContent = "通信エラー";
+          showToast("err", "✕ 通信エラーで、保存できませんでした<small>もう一度、押してください（ここを押すと消えます）</small>", 0);
+          return false;
+        }
+        afterSave(res);
+        if (res.status !== "ok") {
+          showToast("err", "✕ " + escHtml(res.message || "保存できませんでした") + "<small>ここを押すと消えます</small>", 0);
+          return false;
+        }
+        showStaffSum(res, true);
+        flash(el);
+        const sum = "今日の合計　" + fmtMin(res.minutes) + "　／　" + Number(res.wage || 0).toLocaleString() + "円";
+        if (res.warnSlots && res.warnSlots.length) {
+          showToast("warn", "✓ " + escHtml(what) + " 直しました<small>⚠ " + escHtml(res.warnSlots.join("、")) +
+            " は作業が選ばれていません（0分になります）</small>", 8000);
+        } else {
+          showToast("ok", "✓ " + escHtml(what) + " 直しました<small>" + sum + "</small>", 6000);
+        }
+        return true;
+      };
+    }
+    function slotLabel(i) {
+      return (staffSummary && staffSummary.slots && staffSummary.slots[i]) || "";
+    }
+    function flashSlot(i) {
+      flash(document.querySelector('#slotList [data-slot="' + i + '"]'));
+    }
+
+    // 昼食・送迎は、選択肢をボタンで並べ、押したらすぐ保存する
+    function renderChoice(boxId, selId, onPick) {
+      const box = document.getElementById(boxId), sel = document.getElementById(selId);
+      box.innerHTML = "";
+      Array.from(sel.options).forEach(function (o) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cBtn" + (o.value === sel.value ? " on" : "");
+        b.textContent = o.textContent;
+        b.onclick = function () {
+          if (o.value === sel.value) return;
+          const before = sel.value;
+          sel.value = o.value;
+          renderChoice(boxId, selId, onPick);
+          onPick(box.querySelector(".cBtn.on"), before);
+        };
+        box.appendChild(b);
+      });
+    }
+    function renderChoices() {
+      renderChoice("chLunch", "editLunch", function (b, before) { saveLunch(b, before); });
+      renderChoice("chGo", "editGo", function (b, before) { saveSougei(b, "editGo", before); });
+      renderChoice("chBack", "editBack", function (b, before) { saveSougei(b, "editBack", before); });
+    }
+
+    function saveSlotTime(slotIndex, range, el) {
+      const done = startSave(el, slotLabel(slotIndex) + " の実際の時間を「" + (range || "時間帯すべて") + "」に");
       callApi(withPin({ uid: confirmUid, action: "updateSlotTime", slot: slotIndex, range: range }),
-        (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
-        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+        (res) => { if (done(res)) { buildSlotList(res); flashSlot(slotIndex); } },
+        () => done(null));
     }
 
     function withPin(params) {
@@ -1267,28 +1401,40 @@
       }
     }
 
-    function saveTime(which) {
-      const v = document.getElementById(which === "in" ? "editIn" : "editOut").value;
-      if (!v) return;
-      callApi(withPin({ uid: confirmUid, action: "updateTime", which: which, time: v }), afterSave,
-        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    function saveTime(which, el) {
+      const input = document.getElementById(which === "in" ? "editIn" : "editOut");
+      const v = input.value;
+      if (!v) { showToast("err", "✕ 時刻が入っていません<small>ここを押すと消えます</small>", 0); return; }
+      const done = startSave(el, (which === "in" ? "出勤" : "退勤") + "を " + v + " に");
+      callApi(withPin({ uid: confirmUid, action: "updateTime", which: which, time: v }),
+        (res) => { if (done(res)) flash(input); },
+        () => done(null));
     }
 
-    function saveLunch() {
-      callApi(withPin({ uid: confirmUid, action: "updateLunch", lunch: document.getElementById("editLunch").value }),
-        afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+    function saveLunch(el, before) {
+      const sel = document.getElementById("editLunch");
+      const done = startSave(el, "昼食を「" + sel.value + "」に");
+      const back = function () { sel.value = before; renderChoices(); };
+      callApi(withPin({ uid: confirmUid, action: "updateLunch", lunch: sel.value }),
+        (res) => { if (!done(res)) back(); },
+        () => { done(null); back(); });
     }
 
-    function saveSougei() {
+    function saveSougei(el, selId, before) {
+      const sel = document.getElementById(selId);
+      const done = startSave(el, "送迎の" + (selId === "editGo" ? "行き" : "帰り") + "を「" + sel.value + "」に");
+      const back = function () { sel.value = before; renderChoices(); };
       callApi(withPin({ uid: confirmUid, action: "updateSougei", go: document.getElementById("editGo").value,
         back: document.getElementById("editBack").value }),
-        afterSave, () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+        (res) => { if (!done(res)) back(); },
+        () => { done(null); back(); });
     }
 
-    function saveWork(slotIndex, task, which) {
+    function saveWork(slotIndex, task, which, el) {
+      const done = startSave(el, slotLabel(slotIndex) + (which === "2" ? " の残りの作業" : " の作業") + "を「" + (task || "作業なし") + "」に");
       callApi(withPin({ uid: confirmUid, action: "updateWork", slot: slotIndex, task: task, which: which || "1" }),
-        (res) => { afterSave(res); if (res.status === "ok") buildSlotList(res); },
-        () => { document.getElementById("staffMsg").textContent = "通信エラー"; });
+        (res) => { if (done(res)) { buildSlotList(res); flashSlot(slotIndex); } },
+        () => done(null));
     }
 
     function onScanError() {
