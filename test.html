@@ -99,8 +99,10 @@
     .dPart rt { color: #E8F5E9; }
     .dPart + .dRow { border-top: none; }
     .sGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 min(3vw, 23px); }
-    .sTask { font-size: min(4.6vw, 35px); font-weight: bold; color: #222; line-height: 1.25;
-             padding: min(0.4vw, 3px) 0; border-bottom: 1px solid #DCEDC8; }
+    .sItem { padding: min(0.6vw, 5px) 0; border-bottom: 1px solid #DCEDC8; }
+    .sTime { font-size: min(3.8vw, 29px); font-weight: bold; color: #1B5E20; line-height: 1.2; }
+    .sTask { font-size: min(4.6vw, 35px); font-weight: bold; color: #222; line-height: 1.2; }
+    .sBrkItem { font-size: min(3.2vw, 25px); color: #888; padding: min(0.4vw, 3px) 0; border-bottom: 1px solid #DCEDC8; }
     /* 工賃は1行に（見出しと金額を横に並べて、高さを詰める） */
     #cTotalRow { display: flex; align-items: baseline; justify-content: space-between; }
     #cTotalRow .cLabel { margin: 0; }
@@ -111,7 +113,9 @@
     /* 下の案内は短く */
     #cMore { font-size: min(3.4vw, 26px) !important; }
     .sBrk { font-size: min(3.8vw, 29px); color: #888; margin-top: min(0.5vw, 4px); }
-    .sToggle { display: block; margin: min(2.5vw, 19px) auto 0; font-size: min(3.8vw, 29px); padding: min(1.5vw, 11px) min(4vw, 31px);
+    /* 「金額も見る」は、「今日の仕事」の見出しの右に置いて、高さを詰める */
+    #cWorkRow { position: relative; }
+    .sToggle { position: absolute; top: min(1.8vw, 14px); right: min(3vw, 23px); margin: 0; font-size: min(3vw, 23px); padding: min(0.8vw, 6px) min(2vw, 15px);
                border-radius: 10px; border: 2px solid #558B2F; background: #fff; color: #33691E; font-weight: bold; }
     .sToggle rt { color: #33691E; }
     /* 作業名を大きく */
@@ -329,7 +333,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-11-09d 画面改良 試験用";
+    const APP_VERSION = "v2026-11-09f 画面改良 試験用";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -613,19 +617,16 @@
         full.appendChild(row);
       });
 
-      // かんたん表示: 午前・午後の作業の流れ（同じ作業が続くときは1つにまとめる）と、休憩の合計
-      const seq = { am: [], pm: [] };
-      let brkMin = 0;
+      // かんたん表示: 掲示用と同じ考え方で、午前・午後の2列。作業ごとに「時間」と「作業名」。休憩は灰色で小さく。
+      // （時間は必ず確かめるので、最初から出す。作業ごとの金額は「くわしく見る」で開く）
+      const cols = { am: [], pm: [] };
       items.forEach(function (it) {
-        if (it.brk) { brkMin += it.brk[1] - it.brk[0]; return; }
-        const p = toMin(it.w.from) < 720 ? "am" : "pm";
-        const nm = shortTaskName(it.w.task);
-        if (seq[p][seq[p].length - 1] !== nm) seq[p].push(nm);
+        const st = it.brk ? it.brk[0] : toMin(it.w.from);
+        cols[st < 720 ? "am" : "pm"].push(it);
       });
-      // 午前と午後を左右2列に並べ、作業は1行に1つ（スクロールしなくても見えるように）
       const grid = document.createElement("div");
       grid.className = "sGrid";
-      const parts = ["am", "pm"].filter(function (p) { return seq[p].length; });
+      const parts = ["am", "pm"].filter(function (p) { return cols[p].length; });
       if (parts.length === 1) grid.style.gridTemplateColumns = "1fr";
       parts.forEach(function (p) {
         const col = document.createElement("div");
@@ -633,22 +634,27 @@
         ph.className = "dPart";
         ph.innerHTML = p === "am" ? "<ruby>午前<rt>ごぜん</rt></ruby>" : "<ruby>午後<rt>ごご</rt></ruby>";
         col.appendChild(ph);
-        seq[p].forEach(function (nm) {
-          const ln = document.createElement("div");
-          ln.className = "sTask";
-          ln.textContent = nm;
-          col.appendChild(ln);
+        cols[p].forEach(function (it) {
+          const cell = document.createElement("div");
+          if (it.brk) {
+            cell.className = "sBrkItem";
+            cell.innerHTML = "<ruby>休憩<rt>きゅうけい</rt></ruby> " + hm(it.brk[0]) + "〜" + hm(it.brk[1]);
+          } else {
+            cell.className = "sItem";
+            const tm = document.createElement("div");
+            tm.className = "sTime";
+            tm.textContent = it.w.from + "〜" + it.w.to;
+            const nm = document.createElement("div");
+            nm.className = "sTask";
+            nm.textContent = shortTaskName(it.w.task);
+            cell.appendChild(tm); cell.appendChild(nm);
+          }
+          col.appendChild(cell);
         });
         grid.appendChild(col);
       });
       simple.appendChild(grid);
-      if (brkMin > 0) {
-        const b = document.createElement("div");
-        b.className = "sBrk";
-        b.innerHTML = "<ruby>休憩<rt>きゅうけい</rt></ruby> " + brkMin + "<ruby>分<rt>ふん</rt></ruby>";
-        simple.appendChild(b);
-      }
-      const OPEN = "▼ くわしく<ruby>見<rt>み</rt></ruby>る（<ruby>時間<rt>じかん</rt></ruby>と<ruby>金額<rt>きんがく</rt></ruby>）";
+      const OPEN = "▼ <ruby>金額<rt>きんがく</rt></ruby>も<ruby>見<rt>み</rt></ruby>る";
       const tg = document.createElement("button");
       tg.className = "sToggle";
       tg.innerHTML = OPEN;
