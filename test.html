@@ -43,7 +43,10 @@
       /* 作業が多い日は中身が画面より高くなる。上から並べてスクロールできるようにしないと
          「かくにん」ボタンが画面の外に出てしまう。 */
       justify-content: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+      /* iPad で、指の斜めの動きで横にずれないよう、縦だけ動かす */
+      overflow-x: hidden; touch-action: pan-y;
     }
+    html, body { overflow-x: hidden; }
     /* 上（名前・時間）／中（しごとの内訳＝あふれたらここだけスクロール）／下（こうちん・ボタン）。
        こうしないと作業が多い日に合計とボタンが画面の外へ出てしまう。 */
     #confirmName {
@@ -60,7 +63,8 @@
     .badge { flex: 1 1 0; min-width: 0; border: 3px solid #2E7D32; background: #E8F5E9; border-radius: 12px;
              padding: min(1vw, 8px) min(1vw, 8px); text-align: center; line-height: 1.25; }
     .badge .bLabel { font-size: min(3.2vw, 25px); color: #444; white-space: nowrap; }
-    .badge .bVal { font-size: min(5.2vw, 40px); font-weight: bold; color: #1B5E20; white-space: nowrap; }
+    .badge .bVal { font-size: min(4.8vw, 36px); font-weight: bold; color: #1B5E20; white-space: nowrap; }
+    #bLunch { flex: 1.35 1 0; }   /* 「🍚 ご飯あり」が入るよう、昼食の札だけ少し広く */
     .badge.off { border: 3px dashed #BDBDBD; background: #F5F5F5; }
     .badge.off .bVal { color: #9E9E9E; }
     /* ふりがな（漢字の上に小さく） */
