@@ -42,7 +42,7 @@
       box-sizing: border-box; text-align: center;
       /* 作業が多い日は中身が画面より高くなる。上から並べてスクロールできるようにしないと
          「かくにん」ボタンが画面の外に出てしまう。 */
-      justify-content: flex-start; overflow: hidden;
+      justify-content: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
     }
     /* 上（名前・時間）／中（しごとの内訳＝あふれたらここだけスクロール）／下（こうちん・ボタン）。
        こうしないと作業が多い日に合計とボタンが画面の外へ出てしまう。 */
@@ -55,23 +55,37 @@
       flex: 0 0 auto; font-size: min(4.2vw, 32px); color: #555;
       margin-bottom: min(2vw, 15px); line-height: 1.3;
     }
-    #cExtra { display:flex; flex-wrap:wrap; justify-content:center; gap:0 5vw; font-size:min(4.4vw, 34px); font-weight:bold; color:#333; margin:0.5vw 0 1.5vw; }
+    /* 昼食・送迎は、文の中に埋もれないよう、大きな札にする（2026-11-09）。「なし」は灰色・点線で、ひと目で分かるように */
+    #cExtra { flex: 0 0 auto; display:flex; justify-content:center; gap: min(2vw, 15px); margin: 0 0 min(2vw, 15px); width: 92vw; max-width: 600px; }
+    .badge { flex: 1 1 0; min-width: 0; border: 3px solid #2E7D32; background: #E8F5E9; border-radius: 12px;
+             padding: min(1vw, 8px) min(1vw, 8px); text-align: center; line-height: 1.25; }
+    .badge .bLabel { font-size: min(3.2vw, 25px); color: #444; white-space: nowrap; }
+    .badge .bVal { font-size: min(5.2vw, 40px); font-weight: bold; color: #1B5E20; white-space: nowrap; }
+    .badge.off { border: 3px dashed #BDBDBD; background: #F5F5F5; }
+    .badge.off .bVal { color: #9E9E9E; }
+    /* ふりがな（漢字の上に小さく） */
+    rt { font-size: 0.5em; color: #666; font-weight: normal; }
+    #btnOk rt { color: #E8F5E9; }   /* 緑のボタンの上では、白っぽく */
+    #btnNg rt { color: #B71C1C; }
     #cSub #cTime { font-size: min(5vw, 38px); font-weight: bold; color: #222; }
     .cRow {
       flex: 0 0 auto;
       width: 92vw; max-width: 600px; background: #F1F8E9; border-radius: 12px;
       padding: min(2.2vw, 17px) min(4vw, 31px); margin-bottom: min(2vw, 15px); text-align: left;
     }
-    #cWorkRow {
-      /* min-height を付けると、画面が低いときに合計とボタンを押し出してしまう。
-         残った高さをそのまま使い、入りきらないぶんは中でスクロールさせる。 */
-      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
-      overflow: hidden; box-sizing: border-box;
-    }
+    /* iPad の Safari では、固定した画面の中の小さな枠のスクロールが引っかかりやすい。
+       枠の中ではスクロールさせず、画面全体をスクロールさせる（工賃とボタンは下に固定）。 */
+    #cWorkRow { flex: 0 0 auto; box-sizing: border-box; }
     .cLabel { font-size: min(4vw, 31px); color: #555; margin-bottom: min(0.8vw, 6px); line-height: 1.2; }
     .cValue { font-size: min(7vw, 54px); font-weight: bold; color: #222; line-height: 1.2; }
     /* 作業が多い日は、この欄だけがスクロールする */
-    #cDetail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    #cDetail { }
+    /* 工賃とボタンは、画面の下にいつも出しておく */
+    #cFoot { position: sticky; bottom: 0; margin-top: auto; width: 100%; background: #fff;
+             display: flex; flex-direction: column; align-items: center;
+             padding-top: min(1vw, 8px); box-shadow: 0 -8px 10px -8px rgba(0,0,0,0.25); }
+    #cFoot #cTotalRow { margin-bottom: min(1vw, 8px); }
+    #btnOk:disabled { opacity: 0.45; }
     /* 枠に入りきらない作業があることを知らせる。出ていないと、見えていない作業のまま確認されてしまう。 */
     #cMore {
       display: none; flex: 0 0 auto; font-size: min(3.8vw, 29px); font-weight: bold; color: #B71C1C;
@@ -171,19 +185,21 @@
   <!-- 退勤時の本人確認 -->
   <div id="confirmScreen">
     <div id="confirmName"></div>
-    <div id="cSub">きょうの じかん　<span id="cTime"></span></div>
-    <div id="cExtra"><span id="cLunch"></span><span id="cSougei"></span></div>
+    <div id="cSub"><span id="cSubLabel"><ruby>今日<rt>きょう</rt></ruby>の<ruby>時間<rt>じかん</rt></ruby></span>　<span id="cTime"></span></div>
+    <div id="cExtra"><div class="badge" id="bLunch"><div class="bLabel"><ruby>昼食<rt>ちゅうしょく</rt></ruby></div><div class="bVal"></div></div><div class="badge" id="bGo"><div class="bLabel"><ruby>送迎<rt>そうげい</rt></ruby>（<ruby>行<rt>い</rt></ruby>き）</div><div class="bVal"></div></div><div class="badge" id="bBack"><div class="bLabel"><ruby>送迎<rt>そうげい</rt></ruby>（<ruby>帰<rt>かえ</rt></ruby>り）</div><div class="bVal"></div></div></div>
     <div class="cRow" id="cWorkRow">
-      <div class="cLabel">きょうの しごと</div>
+      <div class="cLabel"><ruby>今日<rt>きょう</rt></ruby>の<ruby>仕事<rt>しごと</rt></ruby></div>
       <div id="cDetail"></div>
-      <div id="cMore">▼ したに まだ あります</div>
     </div>
-    <div class="cRow" id="cTotalRow"><div class="cLabel">きょうの こうちん</div><div class="cValue" id="cWage"></div></div>
+    <div id="cFoot">
+    <div id="cMore">▼ <ruby>下<rt>した</rt></ruby>に まだ あります（<ruby>下<rt>した</rt></ruby>まで <ruby>見<rt>み</rt></ruby>ると「<ruby>確認<rt>かくにん</rt></ruby>」が <ruby>押<rt>お</rt></ruby>せます）</div>
+    <div class="cRow" id="cTotalRow"><div class="cLabel"><ruby>今日<rt>きょう</rt></ruby>の<ruby>工賃<rt>こうちん</rt></ruby></div><div class="cValue" id="cWage"></div></div>
     <div id="confirmBtns">
-      <button id="btnNg" onclick="onDiffer()">ちがう</button>
-      <button id="btnOk" onclick="onConfirm()">✓ かくにん</button>
+      <button id="btnNg" onclick="onDiffer()"><ruby>違<rt>ちが</rt></ruby>う</button>
+      <button id="btnOk" onclick="onConfirm()">✓ <ruby>確認<rt>かくにん</rt></ruby></button>
     </div>
-    <div id="staffCall">しょくいんを よんでください</div>
+    </div>
+    <div id="staffCall"><ruby>職員<rt>しょくいん</rt></ruby>を<ruby>呼<rt>よ</rt></ruby>んでください</div>
     <div id="staffEnter"><button onclick="openStaff()">職員の方はこちら</button></div>
   </div>
 
@@ -279,7 +295,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-10-29a 試験用";
+    const APP_VERSION = "v2026-11-09 画面改良 試験用";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -425,21 +441,32 @@
       return "なし";
     }
     function sougeiKana(v) { return v === "あり" ? "あり" : "なし"; }
+    // 札に「あり／なし」を入れる。なしは灰色・点線（2026-11-09）
+    function setBadge(id, html, on) {
+      const b = document.getElementById(id);
+      b.querySelector(".bVal").innerHTML = html;
+      b.className = on ? "badge" : "badge off";
+    }
+    function escHtml(t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 
     function showConfirm(s) {
       try {
         confirmUid = s.uid;
-        document.getElementById("confirmName").textContent = s.name + "さん おつかれさまでした";
+        document.getElementById("confirmName").innerHTML = escHtml(s.name) + "さん お<ruby>疲<rt>つか</rt></ruby>れさまでした";
         // 工賃の根拠になるのは予定時刻（職員が修正した値）。打刻時刻ではない。
         document.getElementById("cTime").textContent = (s.planIn || "") + " 〜 " + (s.planOut || "");
-        document.getElementById("cLunch").textContent = "ひるごはん　" + lunchKana(s.lunch);
-        document.getElementById("cSougei").textContent = "おくりむかえ　いき " + sougeiKana(s.sougeiGo) + "　かえり " + sougeiKana(s.sougeiBack);
+        const lunchHtml = s.lunch === "ご飯あり" ? "🍚 ご<ruby>飯<rt>はん</rt></ruby>あり"
+          : s.lunch === "おかずのみ" ? "おかずだけ" : "なし";
+        setBadge("bLunch", lunchHtml, s.lunch === "ご飯あり" || s.lunch === "おかずのみ");
+        setBadge("bGo", s.sougeiGo === "あり" ? "🚐 あり" : "なし", s.sougeiGo === "あり");
+        setBadge("bBack", s.sougeiBack === "あり" ? "🚐 あり" : "なし", s.sougeiBack === "あり");
         buildDetail(s);
         document.getElementById("cWage").textContent = Number(s.wage || 0).toLocaleString() + " 円";
         document.getElementById("staffCall").style.display = "none";
         document.getElementById("staffEnter").style.display = "none";
         document.getElementById("confirmBtns").style.display = "flex";
         document.getElementById("confirmScreen").style.display = "flex";
+        document.getElementById("confirmScreen").scrollTop = 0; seenAll = false;   // 開くたびに、いちばん上から
         updateMoreHint();   // 画面を出したあとでないと、入りきるかどうかが測れない
       } catch (e) {
         // 画面を作る途中で失敗すると、打刻だけ済んで何も出ない状態になる。理由を出す。
@@ -461,7 +488,7 @@
         if ((s.breakdown || []).length) return buildDetailByTask(s, box);
         const p = document.createElement("div");
         p.className = "dTask";
-        p.textContent = "（さぎょうが まだ はいっていません）";
+        p.innerHTML = "（<ruby>作業<rt>さぎょう</rt></ruby>が まだ <ruby>入<rt>はい</rt></ruby>っていません）";
         box.appendChild(p);
         return;
       }
@@ -497,10 +524,10 @@
           bl.className = "dLine";
           const bn = document.createElement("div");
           bn.className = "dTask";
-          bn.textContent = "きゅうけい";
+          bn.innerHTML = "<ruby>休憩<rt>きゅうけい</rt></ruby>";
           const bam = document.createElement("div");
           bam.className = "dAmount";
-          bam.textContent = bm + "ふん";
+          bam.innerHTML = bm + "<ruby>分<rt>ふん</rt></ruby>";
           bl.appendChild(bn); bl.appendChild(bam);
           br.appendChild(bh); br.appendChild(bl);
           box.appendChild(br);
@@ -518,7 +545,7 @@
         time.textContent = w.from + " 〜 " + w.to;
         const r = document.createElement("div");
         r.className = "dRate";
-        r.textContent = Number(w.rate).toLocaleString() + "円／じかん";
+        r.innerHTML = Number(w.rate).toLocaleString() + "円／<ruby>時間<rt>じかん</rt></ruby>";
         head.appendChild(time); head.appendChild(r);
 
         const line = document.createElement("div");
@@ -562,12 +589,16 @@
     }
 
     // しごとの欄に続きがあるかを見て、案内を出し分ける
+    let seenAll = true;   // 確認画面を、下まで見たか
     function updateMoreHint() {
-      const d = document.getElementById("cDetail");
-      const rest = d.scrollHeight - d.clientHeight - d.scrollTop;
-      document.getElementById("cMore").style.display = rest > 4 ? "block" : "none";
+      const sc = document.getElementById("confirmScreen");
+      const rest = sc.scrollHeight - sc.clientHeight - sc.scrollTop;
+      const more = rest > 4;
+      document.getElementById("cMore").style.display = more ? "block" : "none";
+      if (!more) seenAll = true;
+      document.getElementById("btnOk").disabled = !seenAll;
     }
-    document.getElementById("cDetail").addEventListener("scroll", updateMoreHint);
+    document.getElementById("confirmScreen").addEventListener("scroll", updateMoreHint);
 
     // 95分 → 「1じかん35ふん」
     function hhmm(min) {
@@ -583,9 +614,10 @@
     let laterPerson = null;   // {uid, name}
 
     function setConfirmLabels(later) {
-      document.getElementById("cSub").firstChild.textContent = later ? "その日の じかん　" : "きょうの じかん　";
-      document.querySelector("#cWorkRow .cLabel").textContent = later ? "その日の しごと" : "きょうの しごと";
-      document.querySelector("#cTotalRow .cLabel").textContent = later ? "その日の こうちん" : "きょうの こうちん";
+      const day = later ? "その<ruby>日<rt>ひ</rt></ruby>" : "<ruby>今日<rt>きょう</rt></ruby>";
+      document.getElementById("cSubLabel").innerHTML = day + "の<ruby>時間<rt>じかん</rt></ruby>";
+      document.querySelector("#cWorkRow .cLabel").innerHTML = day + "の<ruby>仕事<rt>しごと</rt></ruby>";
+      document.querySelector("#cTotalRow .cLabel").innerHTML = day + "の<ruby>工賃<rt>こうちん</rt></ruby>";
     }
 
     function dateLabel(ds) {
