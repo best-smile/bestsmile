@@ -85,11 +85,23 @@
     /* 作業が多い日は、この欄だけがスクロールする */
     #cDetail { }
     /* 工賃とボタンは、画面の下にいつも出しておく */
-    #cFoot { position: sticky; bottom: 0; margin-top: auto; width: 100%; background: #fff;
+    /* 画面の下の余白（padding）にも、うしろの行が見えないよう、余白ごと白で覆う */
+    #cFoot { position: sticky; bottom: calc(-1 * min(4vw, 31px)); padding-bottom: min(4vw, 31px); margin-top: auto; width: 100%; background: #fff;
              display: flex; flex-direction: column; align-items: center;
              padding-top: min(1vw, 8px); box-shadow: 0 -8px 10px -8px rgba(0,0,0,0.25); }
     #cFoot #cTotalRow { margin-bottom: min(1vw, 8px); }
     #btnOk:disabled { opacity: 0.45; }
+    /* 午前・午後の見出し */
+    .dPart { display: inline-block; font-size: min(3.8vw, 29px); font-weight: bold; color: #fff; background: #558B2F;
+             border-radius: 8px; padding: 0 min(2vw, 15px); margin: min(1.5vw, 11px) 0 min(0.5vw, 4px); line-height: 1.6; }
+    .dPart rt { color: #E8F5E9; }
+    .dPart + .dRow { border-top: none; }
+    /* 作業名を大きく */
+    .dRow .dTask { font-size: min(5.4vw, 42px); }
+    /* 休憩の行は、小さく灰色（作業の行を目立たせる） */
+    .dRow.dBrk { padding: min(0.6vw, 5px) 0; }
+    .dRow.dBrk .dTime, .dRow.dBrk .dTask, .dRow.dBrk .dAmount { font-size: min(3.6vw, 28px); color: #888; font-weight: normal; }
+    .dRow.dBrk .dHead, .dRow.dBrk .dLine { display: inline-flex; margin-right: min(2vw, 15px); }
     /* 枠に入りきらない作業があることを知らせる。出ていないと、見えていない作業のまま確認されてしまう。 */
     #cMore {
       display: none; flex: 0 0 auto; font-size: min(3.8vw, 29px); font-weight: bold; color: #B71C1C;
@@ -513,11 +525,22 @@
         else if (!(a >= 720 && b <= 780)) { segs.push([a, b]); }
         segs.forEach(function (g) { if (g[1] - g[0] > 0) items.push({ brk: g }); });
       });
+      let lastPart = "";
       items.forEach(function (it) {
+        // 午前・午後が変わるところに、見出しを入れる
+        const st = it.brk ? it.brk[0] : toMin(it.w.from);
+        const part = st < 720 ? "am" : "pm";
+        if (part !== lastPart) {
+          lastPart = part;
+          const ph = document.createElement("div");
+          ph.className = "dPart";
+          ph.innerHTML = part === "am" ? "<ruby>午前<rt>ごぜん</rt></ruby>" : "<ruby>午後<rt>ごご</rt></ruby>";
+          box.appendChild(ph);
+        }
         if (it.brk) {
           const bm = it.brk[1] - it.brk[0];
           const br = document.createElement("div");
-          br.className = "dRow";
+          br.className = "dRow dBrk";
           const bh = document.createElement("div");
           bh.className = "dHead";
           const bt = document.createElement("div");
