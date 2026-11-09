@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>【試験用】出席QR打刻</title>
+  <title>出席QR打刻</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     html, body {
@@ -271,7 +271,7 @@
   </div>
 
   <script>
-    const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyYM2ZNUXJSh39ksQ1hFG3JRiRU5ukWIOs6TsAaVCk4ZT_zwJ34zXflRavX5-IvdGPh/exec";
+    const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxGco3wFCYoJ6g4qRAq2e_NkNOh07hrFtgzkvJH9KTtAWmqpngBSCHKYmZDzL9ZHGFw/exec";
 
     if (WEBAPP_URL.indexOf("WEBAPP_URL_HERE") !== -1) {
       document.getElementById("configNote").textContent =
@@ -279,10 +279,8 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "試験用 v2026-10-29a";
+    const APP_VERSION = "v2026-10-29a 試験用";
     document.getElementById("appVer").textContent = APP_VERSION;
-    document.getElementById("configNote").style.cssText = "color:#c62828;font-weight:bold;font-size:4vw;margin:1vw 0";
-    document.getElementById("configNote").textContent = "【試験用】本番ではありません（試験用の記録に書き込みます）";
 
     let busy = false;
     let lastResultAt = 0;
