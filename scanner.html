@@ -212,7 +212,16 @@
     <div class="box" id="menuBox" style="display:none">
       <button class="btn" onclick="openAttendList()">本日の出席をチェックする</button>
       <button class="btn" onclick="showPick()">記録を修正する</button>
+      <button class="btn" onclick="openLater()">かくにんが まだの日（押し忘れ）</button>
       <button class="btn btnGray" onclick="closeStaff()">とじる</button>
+    </div>
+
+    <!-- 後日のかくにん（押し忘れた日の振り返り）。本人が押し、職員は見守る -->
+    <div class="box" id="laterBox" style="display:none">
+      <label id="laterLabel"></label>
+      <div style="font-size:3.2vw;color:#666;margin:1vw 0 2vw">本人が自分で「かくにん」を押します。職員は見守ってください。押せない方は、紙に署名をもらってください。</div>
+      <div id="laterList"></div>
+      <button class="btn btnGray" id="laterBack">もどる</button>
     </div>
 
     <!-- 日中に修正する時: 誰の記録を直すか選ぶ -->
@@ -270,7 +279,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-10-12a";
+    const APP_VERSION = "v2026-10-29a";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -280,7 +289,7 @@
     let staffPickMode = false;   // 日中の修正で、対象者をこれから選ぶ状態
 
     // 読み取りだけの操作。失敗しても安全にやり直せる（書き込み系は二重記録になるのでやり直さない）
-    const RETRYABLE = ["summary", "taskList", "staffAuth", "ping"];
+    const RETRYABLE = ["summary", "taskList", "staffAuth", "ping", "laterPeople", "laterDays", "laterSummary"];
 
     // Apps Script はしばらく使わないと起動に20秒ほどかかる（計測値）。
     // 実際に使うときにこれを待たされるので、開いている間は数分おきに空打ちして温めておく。
@@ -373,6 +382,11 @@
         // 退勤のときは当日サマリーを出して本人確認へ
         if (res.kubun === "退所") {
           if (res.summary && res.summary.status === "ok") {
+            if (res.summary.confirmMethod === "署名") {   // 署名の人は、紙に署名する。確認画面は出さない
+              el.textContent = `${res.name}さん おつかれさまでした（${res.time} 退所）`;
+              setTimeout(() => { el.className = ""; el.textContent = "QRカードをかざしてください"; busy = false; }, 3000);
+              return;
+            }
             setTimeout(() => showConfirm(res.summary), 300);
             return;
           }
@@ -385,7 +399,7 @@
       } else if (res.status === "duplicate") {
         // 通信エラーで確認画面が出なかった人が読み直したとき。まだ本人確認が済んでいなければ、
         // 確認画面をもう一度出す。
-        if (res.kubun === "退所" && res.summary && res.summary.status === "ok") {
+        if (res.kubun === "退所" && res.summary && res.summary.status === "ok" && res.summary.confirmMethod !== "署名") {
           el.className = "ok";
           el.textContent = `${res.name}さん おつかれさまでした（${res.time || ""} 退所）`;
           setTimeout(() => showConfirm(res.summary), 300);
@@ -563,7 +577,26 @@
       return m + "ふん";
     }
 
+    // ---- 後日のかくにん（押し忘れた日の振り返り）。職員メニューから入る。本人が押し、職員は見守る ----
+    let laterMode = false;
+    let laterDate = "";
+    let laterPerson = null;   // {uid, name}
+
+    function setConfirmLabels(later) {
+      document.getElementById("cSub").firstChild.textContent = later ? "その日の じかん　" : "きょうの じかん　";
+      document.querySelector("#cWorkRow .cLabel").textContent = later ? "その日の しごと" : "きょうの しごと";
+      document.querySelector("#cTotalRow .cLabel").textContent = later ? "その日の こうちん" : "きょうの こうちん";
+    }
+
+    function dateLabel(ds) {
+      const q = String(ds).split("/");
+      const d = new Date(Number(q[0]), Number(q[1]) - 1, Number(q[2]));
+      return Number(q[1]) + "/" + Number(q[2]) + "（" + "日月火水木金土".charAt(d.getDay()) + "）";
+    }
+
     function hideConfirm() {
+      laterMode = false;
+      setConfirmLabels(false);
       document.getElementById("confirmScreen").style.display = "none";
       document.getElementById("message").className = "";
       document.getElementById("message").textContent = "QRカードをかざしてください";
@@ -573,6 +606,7 @@
 
     function onConfirm() {
       if (!confirmUid) return hideConfirm();
+      if (laterMode) return onConfirmLater();
       document.getElementById("confirmBtns").style.display = "none";
       // 通信に数秒かかる。押した手応えが無いと何度も押されてしまう。
       document.getElementById("confirmName").textContent = "きろく しています…";
@@ -587,9 +621,118 @@
     }
 
     function onDiffer() {
+      if (laterMode) return backToLater("ちがうときは、紙に署名をもらってください。内容は、あとで職員が直します。");
       document.getElementById("confirmBtns").style.display = "none";
       document.getElementById("staffCall").style.display = "block";
       document.getElementById("staffEnter").style.display = "block";
+    }
+
+    // 後日のかくにん: 本人が押した実際の日時が記録される（さかのぼらない）。押すまでは、確認のない日として残る。
+    function openLater() {
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("laterBox").style.display = "block";
+      showLaterPeople();
+    }
+
+    function laterMsg(t) { document.getElementById("staffMsg").textContent = t || ""; }
+
+    function showLaterPeople() {
+      laterPerson = null;
+      document.getElementById("laterLabel").textContent = "かくにんが まだの方（押し忘れ）";
+      document.getElementById("laterBack").onclick = function () { backToMenu(); };
+      const box = document.getElementById("laterList");
+      box.innerHTML = "<div class='aNone'>よみこみ中...</div>";
+      callApi(withPin({ action: "laterPeople" }), (res) => {
+        box.innerHTML = "";
+        if (res.status !== "ok") { box.innerHTML = "<div class='aNone'>" + (res.message || "よみこめませんでした") + "</div>"; return; }
+        if (!(res.list || []).length) { box.innerHTML = "<div class='aNone'>かくにんが まだの日は ありません</div>"; return; }
+        res.list.forEach(function (p) {
+          box.appendChild(laterButton(p.name, p.count + "日", function () { showLaterDays(p); }));
+        });
+      }, () => { box.innerHTML = "<div class='aNone'>通信エラー</div>"; });
+    }
+
+    function laterButton(left, right, onclick) {
+      const b = document.createElement("button");
+      b.className = "pickName";
+      b.onclick = onclick;
+      const n = document.createElement("span");
+      n.className = "pickNameText";
+      n.textContent = left;
+      const i = document.createElement("span");
+      i.className = "pickNameInfo";
+      i.textContent = right;
+      b.appendChild(n); b.appendChild(i);
+      return b;
+    }
+
+    function showLaterDays(p) {
+      laterPerson = p;
+      document.getElementById("laterLabel").textContent = p.name + " さん　かくにんが まだの日";
+      document.getElementById("laterBack").onclick = function () { showLaterPeople(); };
+      const box = document.getElementById("laterList");
+      box.innerHTML = "<div class='aNone'>よみこみ中...</div>";
+      callApi(withPin({ action: "laterDays", uid: p.uid }), (res) => {
+        box.innerHTML = "";
+        if (res.status !== "ok") { box.innerHTML = "<div class='aNone'>" + (res.message || "よみこめませんでした") + "</div>"; return; }
+        if (!(res.list || []).length) { box.innerHTML = "<div class='aNone'>かくにんが まだの日は ありません</div>"; return; }
+        res.list.forEach(function (d) {
+          box.appendChild(laterButton(dateLabel(d.date), d.noOut ? "退所の打刻なし" : (d.planIn || "") + "-" + (d.planOut || ""),
+            function () {
+              if (d.noOut) { laterMsg("退所の打刻が ありません。先に打刻を直してください（スプレッドシート）。"); return; }
+              openLaterConfirm(p, d.date);
+            }));
+        });
+      }, () => { box.innerHTML = "<div class='aNone'>通信エラー</div>"; });
+    }
+
+    function openLaterConfirm(p, date) {
+      laterMsg("よみこみ中...");
+      callApi(withPin({ action: "laterSummary", uid: p.uid, date: date }), (s) => {
+        if (s.status !== "ok") { laterMsg(s.message || "よみこめませんでした"); return; }
+        laterMsg("");
+        laterMode = true;
+        laterDate = date;
+        confirmUid = p.uid;
+        document.getElementById("staffScreen").style.display = "none";   // 職員モードの画面は、いったん隠す（本人の確認画面を出す）
+        setConfirmLabels(true);
+        showConfirm(s);
+        document.getElementById("confirmName").textContent = p.name + "さん " + dateLabel(date) + " の ぶん";
+      }, () => laterMsg("通信エラー"));
+    }
+
+    function onConfirmLater() {
+      document.getElementById("confirmBtns").style.display = "none";
+      document.getElementById("confirmName").textContent = "きろく しています…";
+      callApi(withPin({ action: "confirmLater", uid: confirmUid, date: laterDate }), (res) => {
+        if (res.status !== "ok") {
+          backToLater(res.message || "きろくできませんでした");
+          return;
+        }
+        document.getElementById("confirmName").textContent = "きろくしました ありがとうございました ✓";
+        setTimeout(function () { backToLater("かくにんを きろくしました（" + dateLabel(laterDate) + "）"); }, 1800);
+      }, () => {
+        document.getElementById("staffCall").textContent = "つうしんエラー しょくいんを よんでください";
+        document.getElementById("staffCall").style.display = "block";
+        setTimeout(function () { backToLater("通信エラー。もういちど ためしてください"); }, 4000);
+      });
+    }
+
+    // 本人の確認画面から、職員モードの「かくにんが まだの日」に戻る
+    function backToLater(msg) {
+      laterMode = false;
+      setConfirmLabels(false);
+      document.getElementById("confirmScreen").style.display = "none";
+      document.getElementById("staffCall").style.display = "none";
+      document.getElementById("staffEnter").style.display = "none";
+      document.getElementById("confirmBtns").style.display = "flex";
+      confirmUid = null;
+      document.getElementById("staffScreen").style.display = "flex";
+      document.getElementById("pinBox").style.display = "none";
+      document.getElementById("menuBox").style.display = "none";
+      document.getElementById("laterBox").style.display = "block";
+      if (laterPerson) showLaterDays(laterPerson); else showLaterPeople();
+      laterMsg(msg || "");
     }
 
     // ---- 職員モード ----
@@ -641,6 +784,7 @@
       document.getElementById("editBox").style.display = "none";
       document.getElementById("menuBox").style.display = "none";
       document.getElementById("listBox").style.display = "none";
+      document.getElementById("laterBox").style.display = "none";
       document.getElementById("staffTitle").textContent = "職員モード";
       document.getElementById("staffMsg").textContent = "";
       document.getElementById("staffWho").textContent = "";
@@ -652,6 +796,7 @@
 
     // ---- 職員メニュー ----
     function backToMenu() {
+      document.getElementById("laterBox").style.display = "none";
       document.getElementById("listBox").style.display = "none";
       document.getElementById("pickBox").style.display = "none";
       document.getElementById("editBox").style.display = "none";
