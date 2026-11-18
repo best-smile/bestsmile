@@ -369,7 +369,7 @@
     }
 
     // 画面を直したら必ず上げる。タブレットが古いファイルを表示していないかの確認に使う。
-    const APP_VERSION = "v2026-11-10a 画面改良 試験用";
+    const APP_VERSION = "v2026-11-18a 画面改良 試験用";
     document.getElementById("appVer").textContent = APP_VERSION;
 
     let busy = false;
@@ -690,6 +690,15 @@
         grid.appendChild(col);
       });
       simple.appendChild(grid);
+      // 休憩の合計（お昼 12:00〜13:00 は入らない）。2026-11-18 追加
+      const brkTotal = items.reduce(function (a, it) { return a + (it.brk ? it.brk[1] - it.brk[0] : 0); }, 0);
+      if (brkTotal > 0) {
+        const bt = document.createElement("div");
+        bt.className = "sBrkTotal";
+        bt.style.cssText = "margin:8px 0 4px;padding:6px 10px;border-radius:8px;background:#F1F3F4;color:#5F6368;font-size:18px;text-align:center;";
+        bt.innerHTML = "<ruby>休憩<rt>きゅうけい</rt></ruby>　ごうけい " + brkTotal + "<ruby>分<rt>ふん</rt></ruby>";
+        simple.appendChild(bt);
+      }
       const OPEN = "▼ <ruby>金額<rt>きんがく</rt></ruby>も<ruby>見<rt>み</rt></ruby>る";
       const tg = document.createElement("button");
       tg.className = "sToggle";
